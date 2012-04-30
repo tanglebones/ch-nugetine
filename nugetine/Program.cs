@@ -34,7 +34,8 @@ namespace nugetine
                 var arguments =
                     "install \"" + package["name"].AsString + "\""
                     + " -Version " + package["version"].AsString
-                    + " -Source \"" + state.Source + "\"";
+                    + " -Source \"" + state.Source + "\""
+                    + " -OutputDirectory packages";
 
                 @out.WriteLine("nuget " + arguments);
                 var process =
