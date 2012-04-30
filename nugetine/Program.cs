@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -28,8 +30,17 @@ namespace nugetine
 
             state.Index();
 
-            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(state.ProcessCsProj);
+            foreach (var package in state.Packages)
+            {
+                var process =
+                    Process.Start(
+                        new ProcessStartInfo("nuget","install " + package["name"].AsString + " -Version " + package["version"].AsString)
+                        {UseShellExecute = false}
+                        );
+                process.WaitForExit();
+            }
 
+            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(state.ProcessCsProj);
         }
     }
 
@@ -130,6 +141,16 @@ namespace nugetine
                     }
         }
 
+        public IEnumerable<BsonDocument> Packages
+        {
+            get
+            {
+                return _config["packages"].AsBsonDocument.Select(
+                        x => new BsonDocument(x.Name, x.Value.AsBsonDocument["version"])
+                        );
+            }
+        }
+
         public override string ToString()
         {
             return _config.ToString();
@@ -141,5 +162,6 @@ namespace nugetine
         void LoadConfig(string path);
         void ProcessCsProj(string csprojFileName);
         void Index();
+        IEnumerable<BsonDocument> Packages { get; }
     }
 }
