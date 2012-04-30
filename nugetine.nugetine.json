@@ -1,6 +1,6 @@
 {
   "nuget": {
-    "madsrv01":"https://madsrv01/nuget/api/v2",
+    "madsrv01":"http://madsrv01/nuget/api/v2",
     "main":"https://nuget.org/api/v2/",
   },
   "package": {
@@ -30,15 +30,6 @@
         ],
       },
       "source": "move-ex-dotnet",
-    },
-    "Move.Api.Client": {
-      "version": "1.5.1",
-      "assembly": {
-        "lib/net40": [
-          "Move.Api.Client",
-        ],
-      },
-      "source": "move-api-client",
     },
     "NUnit": {
       "version": "2.6.0.12054",
