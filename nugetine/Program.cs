@@ -32,10 +32,12 @@ namespace nugetine
 
             foreach (var package in state.Packages)
             {
+                var arguments = "install " + package["name"].AsString + " -Version " + package["version"].AsString + "-Source \"" + state.Source + "\"";
+                @out.WriteLine("nuget " + arguments);
                 var process =
                     Process.Start(
-                        new ProcessStartInfo("nuget","install " + package["name"].AsString + " -Version " + package["version"].AsString)
-                        {UseShellExecute = false}
+                        new ProcessStartInfo("nuget")
+                        {UseShellExecute = false, Arguments = arguments}
                         );
                 process.WaitForExit();
             }
@@ -156,6 +158,11 @@ namespace nugetine
             }
         }
 
+        public string Source
+        {
+            get { return string.Join(";", _config["nuget"].AsBsonDocument.Values.Select(x => x.AsString)); }
+        }
+
         public override string ToString()
         {
             return _config.ToString();
@@ -168,5 +175,6 @@ namespace nugetine
         void ProcessCsProj(string csprojFileName);
         void Index();
         IEnumerable<BsonDocument> Packages { get; }
+        string Source { get; }
     }
 }
