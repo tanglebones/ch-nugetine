@@ -146,8 +146,13 @@ namespace nugetine
             get
             {
                 return _config["package"].AsBsonDocument.Select(
-                        x => new BsonDocument(x.Name, x.Value.AsBsonDocument["version"])
-                        );
+                    x =>
+                    new BsonDocument
+                        {
+                            {"name", x.Name},
+                            {"version", x.Value.AsBsonDocument["version"]}
+                        }
+                );
             }
         }
 
