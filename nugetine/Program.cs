@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -32,17 +31,22 @@ namespace nugetine
 
             foreach (var package in state.Packages)
             {
-                var arguments = "install " + package["name"].AsString + " -Version " + package["version"].AsString + "-Source \"" + state.Source + "\"";
+                var arguments =
+                    "install \"" + package["name"].AsString + "\""
+                    + " -Version " + package["version"].AsString
+                    + " -Source \"" + state.Source + "\"";
+
                 @out.WriteLine("nuget " + arguments);
                 var process =
                     Process.Start(
                         new ProcessStartInfo("nuget")
-                        {UseShellExecute = false, Arguments = arguments}
+                            {UseShellExecute = false, Arguments = arguments}
                         );
                 process.WaitForExit();
             }
 
-            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(state.ProcessCsProj);
+            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(
+                state.ProcessCsProj);
         }
     }
 
@@ -50,16 +54,19 @@ namespace nugetine
     {
         private readonly BsonDocument _config = new BsonDocument();
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
+
         private static readonly Regex RxReference =
             new Regex(
                 @"<Reference\s+Include\s*=\s*""([^""]+)""\s*>(.*?)</Reference>",
-                RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnoreCase
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
+
         private static readonly Regex RxProjectReference =
             new Regex(
                 @"(<ProjectReference\s*Include="")([^""]+)(""\s*>)(.*?)(</ProjectReference>)",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
+
         private readonly string _thisSln;
 
         public State(string thisSln)
@@ -82,7 +89,7 @@ namespace nugetine
             var packages = new List<string>();
             var newCsprojContents = RxReference.Replace(
                 csprojContents,
-                match=>
+                match =>
                     {
                         var include = match.Groups[1].Value;
                         var splitIndex = include.IndexOf(',');
@@ -90,7 +97,8 @@ namespace nugetine
                             include = include.Substring(0, splitIndex);
                         var assemblyInfo = _assemblyMapping[include.ToUpperInvariant()].AsBsonDocument;
                         var path = assemblyInfo["path"].AsString;
-                        packages.Add("  <package id=\""+assemblyInfo["package"].AsString + "\" version=\""+assemblyInfo["version"].AsString+"\" />");
+                        packages.Add("  <package id=\"" + assemblyInfo["package"].AsString + "\" version=\"" +
+                                     assemblyInfo["version"].AsString + "\" />");
                         return
                             "<Reference Include=\"" + include + "\">"
                             + Environment.NewLine
@@ -108,7 +116,7 @@ namespace nugetine
                 + Environment.NewLine
                 + "<packages>"
                 + Environment.NewLine
-                + string.Join(Environment.NewLine, packages.RemoveDuplicatesOn(x=>x))
+                + string.Join(Environment.NewLine, packages.RemoveDuplicatesOn(x => x))
                 + Environment.NewLine
                 + "</packages>"
                 ;
@@ -117,14 +125,14 @@ namespace nugetine
 
         public void Index()
         {
-            foreach(var package in _config["package"].AsBsonDocument)
-                foreach(var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
-                    foreach(var assembly in dir.Value.AsBsonArray)
+            foreach (var package in _config["package"].AsBsonDocument)
+                foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
+                    foreach (var assembly in dir.Value.AsBsonArray)
                     {
                         var assemblyName = assembly.AsString;
 
-                        var version = package.Value.AsBsonDocument["version","1.0"].AsString;
-                        var source = package.Value.AsBsonDocument["source",_thisSln].AsString;
+                        var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
+                        var source = package.Value.AsBsonDocument["source", _thisSln].AsString;
                         var assemblyInfo = new BsonDocument();
 
                         assemblyInfo["path"] =
@@ -132,7 +140,7 @@ namespace nugetine
                                 "..",
                                 "packages",
                                 package.Name + "." + version,
-                                dir.Name.Replace('/','\\'),
+                                dir.Name.Replace('/', '\\'),
                                 assemblyName + ".dll"
                                 );
                         assemblyInfo["package"] = package.Name;
@@ -154,7 +162,7 @@ namespace nugetine
                             {"name", x.Name},
                             {"version", x.Value.AsBsonDocument["version"]}
                         }
-                );
+                    );
             }
         }
 
