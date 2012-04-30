@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using Move.Ex.Bson;
@@ -29,14 +30,28 @@ namespace nugetine
 
             state.Index();
 
+            DoPackageInstallsAndUpdateGlobalPackagesConfig(@out, state);
+
+            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(
+                state.ProcessCsProj);
+        }
+
+        private static void DoPackageInstallsAndUpdateGlobalPackagesConfig(TextWriter @out, IState state)
+        {
+            var globalPackageConfigSb = new StringBuilder();
+            globalPackageConfigSb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+            globalPackageConfigSb.AppendLine("<packages>");
             foreach (var package in state.Packages)
             {
+                var name = package["name"].AsString;
+                var version = package["version"].AsString;
                 var arguments =
-                    "install \"" + package["name"].AsString + "\""
-                    + " -Version " + package["version"].AsString
+                    "install \"" + name + "\""
+                    + " -Version " + version
                     + " -Source \"" + state.Source + "\""
                     + " -OutputDirectory packages";
 
+                globalPackageConfigSb.AppendLine("  <package id=\"" + name + "\" version=\"" + version + "\" />");
                 @out.WriteLine("nuget " + arguments);
                 var process =
                     Process.Start(
@@ -45,9 +60,15 @@ namespace nugetine
                         );
                 process.WaitForExit();
             }
-
-            Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).AsParallel().ForAll(
-                state.ProcessCsProj);
+            globalPackageConfigSb.AppendLine("</packages>");
+            foreach (var globalPackagesConfigFileName in new[] {"packages.config", Path.Combine(".nuget", "packages.config")})
+            {
+                var contents = globalPackageConfigSb.ToString();
+                if (File.Exists(globalPackagesConfigFileName))
+                {
+                    File.WriteAllText(globalPackagesConfigFileName, contents);
+                }
+            }
         }
     }
 
@@ -110,7 +131,10 @@ namespace nugetine
                             + "    </Reference>";
                     }
                 );
-            File.WriteAllText(csprojFileName, newCsprojContents);
+
+            if (csprojContents != newCsprojContents)
+                File.WriteAllText(csprojFileName, newCsprojContents);
+
             var packagesConfigFileName = Path.Combine(csprojDirectory, "packages.config");
             var newPackagesConfigContents =
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
