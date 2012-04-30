@@ -88,8 +88,8 @@ namespace nugetine
                             + "    </Reference>";
                     }
                 );
-            System.Diagnostics.Debug.WriteLine(newCsprojContents);
-            var packagesConfig = Path.Combine(csprojDirectory, "packages.config");
+            File.WriteAllText(csprojFileName, newCsprojContents);
+            var packagesConfigFileName = Path.Combine(csprojDirectory, "packages.config");
             var newPackagesConfigContents =
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                 + Environment.NewLine
@@ -99,7 +99,7 @@ namespace nugetine
                 + Environment.NewLine
                 + "</packages>"
                 ;
-            System.Diagnostics.Debug.WriteLine(newPackagesConfigContents);
+            File.WriteAllText(packagesConfigFileName, newPackagesConfigContents);
         }
 
         public void Index()
