@@ -1,0 +1,52 @@
+{
+  "nuget": {
+    "madsrv01":"https://madsrv01/nuget/api/v2",
+    "main":"https://nuget.org/api/v2/",
+  },
+  "package": {
+    "mongocsharpdriver": {
+      "version": "1.4.2",
+      "assembly": {
+        "lib/net35": [
+          "MongoDB.Bson",
+          "MongoDB.Driver",
+        ],
+      },
+    },
+    "Move.Ex.Bson": {
+      "version": "1.0.3",
+      "assembly": {
+        "lib/net40": [
+          "Move.Ex.Bson",
+        ],
+      },
+      "source": "move-ex-bson",
+    },
+    "Move.Ex.DotNet": {
+      "version": "1.0",
+      "assembly": {
+        "lib/net40": [
+          "Move.Ex.DotNet",
+        ],
+      },
+      "source": "move-ex-dotnet",
+    },
+    "Move.Api.Client": {
+      "version": "1.5.1",
+      "assembly": {
+        "lib/net40": [
+          "Move.Api.Client",
+        ],
+      },
+      "source": "move-api-client",
+    },
+    "NUnit": {
+      "version": "2.6.0.12054",
+      "assembly": {
+        "lib": [
+          "nunit.framework",
+        ],
+      },
+    },
+  },
+}
