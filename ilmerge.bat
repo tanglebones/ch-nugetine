@@ -1,0 +1,11 @@
+SETLOCAL ENABLEEXTENSIONS
+SET OUTPUTDIR=%1
+SET OUTPUTDIR=%OUTPUTDIR:"=%
+SET EXE=%2
+SET EXE=%EXE:"=%
+SET BUILDDIR=%3
+SET BUILDDIR=%BUILDDIR:"=%
+SET "DLLS= "
+FOR %%A in ("%BUILDDIR%\*.dll") do ( SET "DLLS=%DLLS% "%%A"")
+echo ilmerge /targetplatform:v4 "/out:%OUTPUTDIR%\%EXE%" "%BUILDDIR%\%EXE%" %DLLS%
+ilmerge /targetplatform:v4 "/out:%OUTPUTDIR%\%EXE%" "%BUILDDIR%\%EXE%" %DLLS%
