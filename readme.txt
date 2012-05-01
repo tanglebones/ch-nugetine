@@ -1,7 +1,58 @@
 Assumptions for sources
 
-- source is the sibling directory of the solution being updated
+- foreign sources are in the sibling directory of the solution being updated (e.g. up one directory from sln file)
 - assemblies are produced by a csproj with the same name in a directory of the same name
-- e.g. ../${source}/${assembly_name}/${assembly_name}.csproj
-- if no version is given the assembly exists only as source
-- if ../nugetine/master.nugetine.json exists it'll be loaded first and overriden by the local .nugetine.json
+  - e.g. ../${source}/${assembly_name}/${assembly_name}.csproj
+- if no version is given 1.0 is assumed.
+- if multiple .nugetine.json files exist they'll be loaded and merged, overridden by the sln .nugetine.json
+- Currently no error handling... use at your own risk, etc.
+
+.nugetine.json format:
+// the comments should be removed...
+{
+  // nuget servers
+  "nuget": {
+    "madsrv01":"http://madsrv01/nuget/api/v2",
+    "main":"https://nuget.org/api/v2/",
+  },
+
+  // packages
+  "package": {
+    "mongocsharpdriver": {
+      "version": "1.4.2",
+      "assembly": {
+		// directory in package install
+        "lib/net35": [
+	      // assembly name in directory
+          "MongoDB.Bson",
+          "MongoDB.Driver",
+        ],
+      },
+    },
+    "NUnit": {
+      "version": "2.6.0.12054",
+      "assembly": {
+        "lib": [
+          "nunit.framework",
+        ],
+      },
+    },
+	...
+	"Your.Package": {
+      "version": "1.0.3",
+      "assembly": {
+        "lib/net40": [
+          "Your.Package",
+        ],
+      },
+	  // if used in the "source" section below this is the directory at $(SolutionDir)/../ that the source for the package is checked out into.
+      "source": "your-package",
+    },
+	...
+  },
+
+  // packages to configure as source references instead of package references
+  // very experimental!
+  "source": [
+  ]
+}
