@@ -13,31 +13,5 @@
         ],
       },
     },
-    "Move.Ex.Bson": {
-      "version": "1.0.3",
-      "assembly": {
-        "lib/net40": [
-          "Move.Ex.Bson",
-        ],
-      },
-      "source": "move-ex-bson",
-    },
-    "Move.Ex.DotNet": {
-      "version": "1.0",
-      "assembly": {
-        "lib/net40": [
-          "Move.Ex.DotNet",
-        ],
-      },
-      "source": "move-ex-dotnet",
-    },
-    "NUnit": {
-      "version": "2.6.0.12054",
-      "assembly": {
-        "lib": [
-          "nunit.framework",
-        ],
-      },
-    },
   },
 }
