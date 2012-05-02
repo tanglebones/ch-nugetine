@@ -67,4 +67,4 @@ TODO
 
 - much better error checking and reporting
 - a "glean" mode that attempts to create a .nugetine.json configuration based on an existing workspace
-
+- normalize the csproj and sln output to minimize diffs when switching between package refs and source refs and back again.
