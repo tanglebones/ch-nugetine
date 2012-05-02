@@ -60,6 +60,7 @@ Assumptions
   // packages to configure as source references instead of package references
   // very experimental!
   "source": [
+    "Your.Package",
   ]
 }
 
