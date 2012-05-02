@@ -1,4 +1,10 @@
-Assumptions for sources
+This is experimental and not well tested, use at your own risk!
+
+NuGetine attempts to enforce a consistent set of package references in a sln+csprojs workspace. It rewrites all references specified by the nugetine.json configuration to one version requested and makes them all non version specific.
+
+There is further experimental support for switching from a package reference to a project reference in a sibling workspace.
+
+Assumptions
 
 - foreign sources are in the sibling directory of the solution being updated (e.g. up one directory from sln file)
 - assemblies are produced by a csproj with the same name in a directory of the same name
