@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>ch-nugetine</id>
+    <version>1.0</version>
+    <title>nugetine</title>
+    <authors>Clifford Hammerschmidt</authors>
+    <owners>Clifford Hammerschmidt; Move Inc</owners>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</licenseUrl>
+    <projectUrl>https://github.com/tanglebones/ch-nugetine</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Re-writes csprojs and sln files to make them all refer to the same nuget package versions (and lib type), and makes references not version specific. Also has support for switching between a package reference and a source reference (based on the conventions I use; see the readme.txt).</description>
+    <releaseNotes>Initial Version. (Experimental! Use at your own risk!)</releaseNotes>
+    <copyright>Copyright 2012 Clifford Hammerschmidt and Move Inc.</copyright>
+    <tags>nuget package reference</tags>
+  </metadata>
+  <files>
+    <file src="..\nugetine.exe" target="tools" />
+  </files>
+</package>

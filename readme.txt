@@ -62,3 +62,9 @@ Assumptions
   "source": [
   ]
 }
+
+TODO
+
+- much better error checking and reporting
+- a "glean" mode that attempts to create a .nugetine.json configuration based on an existing workspace
+

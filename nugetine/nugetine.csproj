@@ -57,6 +57,9 @@
     <Compile Include="Internal\ReWriter.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="nugetine.nuspec">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
