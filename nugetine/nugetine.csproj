@@ -66,7 +66,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>"$(SolutionDir)ilmerge.bat" "$(SolutionDir)" "$(TargetFileName)" "$(TargetDir)"</PostBuildEvent>
+    <PostBuildEvent>"$(SolutionDir)ilmerge.exe" /targetplatform:v4 "/out:$(SolutionDir)$(TargetFileName)" "$(TargetDir)$(TargetFileName)" "$(TargetDir)MongoDB.Bson.dll"</PostBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
