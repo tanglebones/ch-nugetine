@@ -1,6 +1,6 @@
 {
   "nuget": {
-    "madsrv01":"http://madsrv01/nuget/api/v2",
+    "madsrv01":"\\\\madsrv01\\Packages",
     "main":"https://nuget.org/api/v2/",
   },
   "package": {
