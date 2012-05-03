@@ -63,6 +63,12 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline
                 );
 
+        private static readonly Regex RxNugetTargetsSources =
+            new Regex(
+                @"<PackageSources>([^<]+)</PackageSources>",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled 
+                );
+
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
         private readonly BsonDocument _config = new BsonDocument();
 
@@ -115,6 +121,20 @@ namespace nugetine.Internal
             DoPackageInstallsAndUpdateGlobalPackagesConfig();
             RewriteCsProjs();
             RewriteSln();
+            RewriteNugetTargets();
+        }
+
+        private void RewriteNugetTargets()
+        {
+            const string nugetTargetsFilename = ".nuget/NuGet.targets";
+            if (!File.Exists(nugetTargetsFilename)) return;
+            var contents = File.ReadAllText(nugetTargetsFilename);
+            var newContents = RxNugetTargetsSources.Replace(
+                contents,
+                m => "<PackageSources>\"" + Source + "\"</PackageSources>",
+                1);
+            if (newContents!=contents)
+                File.WriteAllText(nugetTargetsFilename, newContents);
         }
 
         private void Index()
