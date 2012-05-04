@@ -53,13 +53,13 @@ namespace nugetine.Internal
 
         private static readonly Regex RxForeignSlnProjectEntry =
             new Regex(
-                @"Project\(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}""\)\s*=\s*""([^""]+)"",\s*""..\\([^""]+)"",\s*""([^""]+)"".*?EndProject",
+                @"\bProject\b\(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}""\)\s*=\s*""([^""]+)"",\s*""..\\([^""]+)"",\s*""([^""]+)"".*?\bEndProject\b",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline
                 );
 
         private static readonly Regex RxSlnProjectEnd =
             new Regex(
-                @"EndProject",
+                @"\bEndProject\b",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline
                 );
 
