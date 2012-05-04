@@ -15,6 +15,6 @@
     <tags>nuget package reference</tags>
   </metadata>
   <files>
-    <file src="nugetine.exe" target="tools" />
+    <file src="..\nugetine.exe" target="tools" />
   </files>
 </package>
