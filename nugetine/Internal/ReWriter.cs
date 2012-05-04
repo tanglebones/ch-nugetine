@@ -69,6 +69,12 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled 
                 );
 
+        private static readonly Regex RxSolutionDirHackInCsProj =
+            new Regex(
+                @"(<SolutionDir Condition=""\$\(SolutionDir\) == '' Or \$\(SolutionDir\) == '\*Undefined\*'"">)([^<]*)(</SolutionDir>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled         
+                );
+
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
         private readonly BsonDocument _config = new BsonDocument();
 
@@ -292,6 +298,13 @@ namespace nugetine.Internal
                     }
                 );
 
+            // re-write nuget package restored SolutionDir hack to not depend on the check directory name
+
+            newCsprojContents = RxSolutionDirHackInCsProj.Replace(
+                newCsprojContents,
+                match => match.Groups[1].Value + "..\\" + match.Groups[3].Value,
+                1);
+            
 
             // re-write package references
             newCsprojContents = RxReference.Replace(
