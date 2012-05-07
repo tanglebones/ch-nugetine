@@ -43,5 +43,13 @@ namespace nugetine.Internal
                 bson[element.Name] = element.Value;
             }
         }
+
+        public static int IndexOf<T>(this IEnumerable<T> seq, Func<T,bool> pred)
+        {
+            var asArr = seq.ToArray();
+            var length = asArr.Length;
+            for (var i = 0; i < length; ++i) { if (pred(asArr[i])) return i; }
+            return -1;
+        }
     }
 }

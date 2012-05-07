@@ -18,21 +18,35 @@ namespace nugetine
 
             var reWriter = SetupReWriter(@out, slnPrefix);
 
+            if (reWriter == null)
+            {
+                @out.WriteLine("Attempting to auto-generate " + slnPrefix + ".nugetine.json");
+                Glean(@out, slnPrefix);
+                @out.WriteLine("Verify " + slnPrefix + ".nugetine.json is correct and re-run.");
+                Environment.Exit(-1);
+            }
+
             @out.WriteLine(reWriter.ToString());
 
             reWriter.Run();
         }
 
+        private static void Glean(TextWriter @out, string slnPrefix)
+        {
+            IGleaner gleaner = new Gleaner(@out, slnPrefix);
+            gleaner.Run();
+        }
+
         private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix)
         {
-            IReWriter reWriter = new ReWriter(@out, slnPrefix + ".sln");
-
             var slnNugetineFileName = slnPrefix + ".nugetine.json";
             if (!File.Exists(slnNugetineFileName))
             {
                 @out.WriteLine("Could not find: " + slnNugetineFileName);
-                Environment.Exit(-1);
+                return null;
             }
+
+            IReWriter reWriter = new ReWriter(@out, slnPrefix + ".sln");
 
             foreach (var nugetineFile in
                 Directory.EnumerateFiles(".", "*.nugetine.json")

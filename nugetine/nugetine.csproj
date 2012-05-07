@@ -52,6 +52,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Internal\Gleaner.cs" />
+    <Compile Include="Internal\Interface\IGleaner.cs" />
     <Compile Include="Internal\Ex.cs" />
     <Compile Include="Internal\Interface\IReWriter.cs" />
     <Compile Include="Program.cs" />
