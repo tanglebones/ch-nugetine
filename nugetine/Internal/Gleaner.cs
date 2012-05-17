@@ -83,6 +83,9 @@ namespace nugetine.Internal
                 {
                     var hintPath = m.Groups[2].Value;
                     var assemblyName = m.Groups[1].Value;
+                    var commaOffset = assemblyName.IndexOf(',');
+                    if (commaOffset > 0)
+                        assemblyName = assemblyName.Substring(0,commaOffset);
 
                     var pathBits = hintPath.Split(Path.DirectorySeparatorChar);
                     if (pathBits.Length <= 2) continue;

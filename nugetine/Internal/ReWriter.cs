@@ -66,13 +66,13 @@ namespace nugetine.Internal
         private static readonly Regex RxNugetTargetsSources =
             new Regex(
                 @"<PackageSources>([^<]+)</PackageSources>",
-                RegexOptions.IgnoreCase | RegexOptions.Compiled 
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
         private static readonly Regex RxSolutionDirHackInCsProj =
             new Regex(
                 @"(<SolutionDir Condition=""\$\(SolutionDir\) == '' Or \$\(SolutionDir\) == '\*Undefined\*'"">)([^<]*)(</SolutionDir>)",
-                RegexOptions.IgnoreCase | RegexOptions.Compiled         
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
@@ -139,7 +139,7 @@ namespace nugetine.Internal
                 contents,
                 m => "<PackageSources>\"" + Source + "\"</PackageSources>",
                 1);
-            if (newContents!=contents)
+            if (newContents != contents)
                 File.WriteAllText(nugetTargetsFilename, newContents);
         }
 
@@ -304,7 +304,7 @@ namespace nugetine.Internal
                 newCsprojContents,
                 match => match.Groups[1].Value + "..\\" + match.Groups[3].Value,
                 1);
-            
+
 
             // re-write package references
             newCsprojContents = RxReference.Replace(
