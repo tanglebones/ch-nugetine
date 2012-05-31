@@ -55,6 +55,25 @@ namespace nugetine.Internal
         public void Run()
         {
             var csprojFiles = Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories);
+            var otherSourceCsprojFiles = 
+                Directory.EnumerateDirectories("..")
+                .Where(d=>!File.Exists(Path.Combine(d,"nugetine.exclude")))
+                .SelectMany(Directory.EnumerateDirectories)
+                .SelectMany(x=>Directory.EnumerateFiles(x,Path.GetFileName(x)+".csproj"))
+                .Where(y=>!csprojFiles.Any(z=>z.EndsWith(y)));
+
+            var otherAssemblies = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+            foreach (var x in otherSourceCsprojFiles)
+            {
+                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(x)??"";
+                var otherAssembly = x.Split(Path.DirectorySeparatorChar)[1];
+
+                if (!otherAssemblies.ContainsKey(fileNameWithoutExtension))
+                {
+                    otherAssemblies[fileNameWithoutExtension] = otherAssembly;
+                }
+            }
+
             var packageRefs = new HashSet<PackageInfo>(PackageInfo.Comparer);
             var assemblies = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
@@ -136,6 +155,10 @@ namespace nugetine.Internal
                 if (!adoc.Contains(pi.LibPath))
                     adoc[pi.LibPath] = new BsonArray();
                 adoc[pi.LibPath].AsBsonArray.Add(pi.AssemblyName);
+                if (otherAssemblies.ContainsKey(pi.PackageName))
+                {
+                    package[pi.PackageName].AsBsonDocument["source"] = otherAssemblies[pi.PackageName];
+                }
             }
             
             var nugetine =
