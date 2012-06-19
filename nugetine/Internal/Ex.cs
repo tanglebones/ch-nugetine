@@ -7,6 +7,16 @@ namespace nugetine.Internal
 {
     internal static class Ex
     {
+        public static ISet<T> ToSet<T>(this IEnumerable<T> enumerable)
+        {
+            ISet<T> set = new HashSet<T>();
+            foreach (var e in enumerable)
+            {
+                set.Add(e);
+            }
+            return set;
+        }
+
         public static IEnumerable<T> RemoveDuplicatesOn<T, TK>(this IEnumerable<T> enumerable, Func<T, TK> selector)
         {
             var seenSet = new HashSet<TK>();
@@ -50,6 +60,15 @@ namespace nugetine.Internal
             var length = asArr.Length;
             for (var i = 0; i < length; ++i) { if (pred(asArr[i])) return i; }
             return -1;
+        }
+
+        public static TV GetOrAdd<TK, TV>(this IDictionary<TK, TV> d, TK k, Func<TV> f)
+        {
+            TV v;
+            if (d.TryGetValue(k, out v)) return v;
+            v = f();
+            d[k] = v;
+            return v;
         }
     }
 }

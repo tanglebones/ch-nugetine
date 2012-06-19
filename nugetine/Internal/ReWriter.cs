@@ -17,19 +17,43 @@ namespace nugetine.Internal
 
         private static readonly Regex RxReference =
             new Regex(
-                @"<Reference\s+Include\s*=\s*""([^""]+)""\s*>(.*?)</Reference>",
+                @"<Reference\s+Include\s*=\s*""([^""]+)""\s*(?:/>|>(.*?)</Reference>)",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
         private static readonly Regex RxProjectReference =
             new Regex(
-                @"<ProjectReference\s+Include\s*=""([^""]+)""\s*(.*?)</ProjectReference>",
+                @"<ProjectReference\s+Include\s*=""([^""]+)""\s*(?:/>|>(.*?)</ProjectReference>)",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
         private static readonly Regex RxStartOfReferences =
             new Regex(
                 @"<Reference",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxDependencies =
+            new Regex(
+                @"<dependencies>(.*?)</dependencies>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxDependency =
+            new Regex(
+                @"<dependency[^>]*?id=""([^""]+)""[^>]*?/>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxVersion =
+            new Regex(
+                @"<version>(.*?)</version>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxMetaData =
+            new Regex(
+                @"<metadata>(.*?)</metadata>",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
@@ -88,10 +112,11 @@ namespace nugetine.Internal
         private readonly ISet<string> _source = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         private IEnumerable<string> _localCsProjs;
 
-        public ReWriter(TextWriter @out, string slnFile)
+        public ReWriter(TextWriter @out, string slnFile, BsonDocument sourceIndex)
         {
             _out = @out;
             _slnFile = slnFile;
+            _sourceIndex = sourceIndex;
         }
 
         private IEnumerable<BsonDocument> Packages
@@ -149,6 +174,8 @@ namespace nugetine.Internal
                 foreach (var source in _config["source"].AsBsonArray)
                     _source.Add(source.AsString);
 
+            var sourceBase = _sourceIndex["base"].AsString;
+
             foreach (var package in _config["package"].AsBsonDocument)
                 foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
                     foreach (var assembly in dir.Value.AsBsonArray)
@@ -158,12 +185,13 @@ namespace nugetine.Internal
                             _reference.Add(assemblyName);
 
                         var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
-                        var source = package.Value.AsBsonDocument["source", string.Empty].AsString;
+                        var source = _sourceIndex["source"].AsBsonDocument[package.Name, string.Empty].AsString;
+                        if (!string.IsNullOrEmpty(source)) source = Path.Combine(sourceBase, source);
                         var assemblyInfo = new BsonDocument();
 
                         assemblyInfo["path"] =
                             Path.Combine(
-                                "..",
+                                "$(SolutionDir)",
                                 "packages",
                                 package.Name + "." + version,
                                 dir.Name.Replace('/', '\\'),
@@ -253,8 +281,7 @@ namespace nugetine.Internal
                             {
                                 var assemblyInfo = _assemblyMapping[x.ToUpperInvariant()].AsBsonDocument;
                                 return MakeSlnProjectReference(x,
-                                                               Path.Combine("..", assemblyInfo["source"].AsString, x,
-                                                                            x + ".csproj"));
+                                                               Path.Combine(assemblyInfo["source"].AsString, x + ".csproj"));
                             }
                         )
                     );
@@ -272,19 +299,28 @@ namespace nugetine.Internal
             var csprojDirectory = Path.GetDirectoryName(csprojFileName);
             if (csprojDirectory == null) throw new ArgumentException(csprojFileName);
             var csprojContents = File.ReadAllText(csprojFileName);
+            var nuspecFile = Path.Combine(csprojDirectory, Path.GetFileNameWithoutExtension(csprojFileName) + ".nuspec");
+            var nuspecFileExists = File.Exists(nuspecFile);
             var packages = new List<string>();
             var toAddToProjectReferences = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             var toAddToReferences = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            var projectRefs = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+
 
             // re-write project references
             var newCsprojContents = RxProjectReference.Replace(
                 csprojContents,
                 match =>
                     {
-                        var include = match.Groups[1].Value;
-                        include = Path.GetFileNameWithoutExtension(include);
+                        var includeDir = match.Groups[1].Value;
+                        var include = Path.GetFileNameWithoutExtension(includeDir);
                         if (include == null)
                             return match.Value;
+
+                        // project is a package and depends on a sibling project that is a package
+                        if (nuspecFileExists && File.Exists(Path.Combine(include, include + ".nuspec")))
+                            projectRefs.Add(include);
+
                         if (_source.Contains(include))
                         {
                             return match.Value;
@@ -297,6 +333,49 @@ namespace nugetine.Internal
                         return match.Value;
                     }
                 );
+
+            // re-write nuspec file if it exists
+            if (nuspecFileExists)
+            {
+                if (projectRefs.Any())
+                {
+                    var nuspecContents = File.ReadAllText(nuspecFile);
+                    string newNuspecContents;
+                    if (RxDependencies.IsMatch(nuspecContents))
+                    {
+                        newNuspecContents = RxDependencies.Replace(
+                            nuspecContents,
+                            match => "<dependencies>" +
+                                     Environment.NewLine +
+                                     RemoveProjectRefs(match.Groups[1].Value, projectRefs) +
+                                     MakeProjectDependencies(projectRefs) +
+                                     Environment.NewLine +
+                                     "</dependencies>"
+                        );
+                    }
+                    else
+                    {
+                        newNuspecContents = RxMetaData.Replace(
+                            nuspecContents,
+                            match => "<metadata>" +
+                                     match.Groups[1].Value +
+                                     Environment.NewLine +
+                                     "<dependencies>" +
+                                     Environment.NewLine +
+                                     MakeProjectDependencies(projectRefs) +
+                                     Environment.NewLine +
+                                     "</dependencies>" +
+                                     Environment.NewLine +
+                                     "</metadata>"
+                                     );
+                    }
+
+                    if (newNuspecContents != nuspecContents)
+                    {
+                        File.WriteAllText(nuspecFile, newNuspecContents);
+                    }
+                }
+            }
 
             // re-write nuget package restored SolutionDir hack to not depend on the check directory name
 
@@ -331,7 +410,7 @@ namespace nugetine.Internal
                             var path = assemblyInfo["path"].AsString;
                             packages.Add("  <package id=\"" + assemblyInfo["package"].AsString + "\" version=\"" +
                                          assemblyInfo["version"].AsString + "\" />");
-                            return MakeReferenceSection(path, include);
+                            return MakeReferenceSection(path.Replace("..\\packages","$(SolutionDir)\\packages"), include);
                         }
 
                         // leave everything else alone.
@@ -355,7 +434,7 @@ namespace nugetine.Internal
                                         var path = assemblyInfo["path"].AsString;
                                         packages.Add("  <package id=\"" + assemblyInfo["package"].AsString +
                                                      "\" version=\"" + assemblyInfo["version"].AsString + "\" />");
-                                        return MakeReferenceSection(path, assemblyName);
+                                        return MakeReferenceSection(path.Replace("..\\packages", "$(SolutionDir)\\packages"), assemblyName);
                                     }
                             )
                         );
@@ -395,8 +474,7 @@ namespace nugetine.Internal
                             assemblyName =>
                                 {
                                     var assemblyInfo = _assemblyMapping[assemblyName.ToUpperInvariant()].AsBsonDocument;
-                                    var path = Path.Combine("..", "..", assemblyInfo["source"].AsString, assemblyName,
-                                                            assemblyName + ".csproj");
+                                    var path = Path.Combine(assemblyInfo["source"].AsString, assemblyName + ".csproj");
                                     return MakeProjectReferenceSection(path, assemblyName);
                                 }));
                 if (RxStartOfProjectReferences.IsMatch(newCsprojContents))
@@ -443,6 +521,35 @@ namespace nugetine.Internal
             File.WriteAllText(packagesConfigFileName, newPackagesConfigContents);
         }
 
+        private string RemoveProjectRefs(string value, ISet<string> projectRefs)
+        {
+            return RxDependency.Replace(
+                value,
+                match => projectRefs.Contains(match.Groups[1].Value) ? "" : match.Value
+                );
+        }
+
+        private readonly IDictionary<string,string> _nuspecVersionCache = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+        private readonly BsonDocument _sourceIndex;
+
+        private string MakeProjectDependencies(IEnumerable<string> projectRefs)
+        {
+            var deps = from pref in projectRefs.OrderBy(x => x)
+                       let version = _nuspecVersionCache
+                           .GetOrAdd(
+                               pref,
+                               () =>
+                                   {
+// ReSharper disable AccessToModifiedClosure
+                                       var contents = File.ReadAllText(Path.Combine(pref, pref + ".nuspec"));
+// ReSharper restore AccessToModifiedClosure
+                                       var match = RxVersion.Match(contents);
+                                       return match.Groups[1].Value;
+                                   })
+                       select string.Format("<dependency id=\"{0}\" version=\"{1}\"/>", pref, version);
+            return string.Join(Environment.NewLine, deps);
+        }
+
         private string MakeProjectReferenceSection(string path, string assemblyName)
         {
             var csProjGuid = _csProjGuids[assemblyName];
@@ -477,7 +584,7 @@ namespace nugetine.Internal
             foreach (var source in _source)
             {
                 var assemblyInfo = _assemblyMapping[source.ToUpperInvariant()].AsBsonDocument;
-                IndexCsProj(Path.Combine("..", assemblyInfo["source"].AsString, source, source + ".csproj"));
+                IndexCsProj(Path.Combine(assemblyInfo["source"].AsString, source + ".csproj"));
             }
         }
 

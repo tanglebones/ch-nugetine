@@ -54,7 +54,8 @@ namespace nugetine.Internal
 
         public void Run()
         {
-            var csprojFiles = Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories);
+            var csprojFiles = Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).ToSet();
+
             var packageRefs = new HashSet<PackageInfo>(PackageInfo.Comparer);
             var assemblies = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
@@ -142,7 +143,8 @@ namespace nugetine.Internal
                 new BsonDocument
                     {
                         {"nuget", nuget},
-                        {"package", package}
+                        {"package", package},
+                        {"source", new BsonArray()}
                     };
 
             var nugetineContent = nugetine.ToJson(_settings);

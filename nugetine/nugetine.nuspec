@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>ch-nugetine</id>
-    <version>1.0</version>
+    <version>2.0</version>
     <title>nugetine</title>
     <authors>Clifford Hammerschmidt</authors>
     <owners>Clifford Hammerschmidt; Move Inc</owners>

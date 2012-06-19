@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Security.Permissions;
+using MongoDB.Bson;
 using nugetine.Internal;
 using nugetine.Internal.Interface;
 
@@ -13,17 +14,26 @@ namespace nugetine
         public static void Main(string[] args)
         {
             var @out = Console.Out;
+            var index = args.Any(a => a == "-i");
+            if (index)
+            {
+                @out.WriteLine("Creating index.");
+                Index(@out);
+                Environment.Exit(0);
+            }
 
             var slnPrefix = DetermineSlnPrefixAndSetupEnviroment(args, @out);
 
-            var reWriter = SetupReWriter(@out, slnPrefix);
+            var sourceIndex = LoadSourceIndex();
+            var reWriter = SetupReWriter(@out, slnPrefix, sourceIndex);
 
-            if (reWriter == null)
+            var gleen = args.Any(a => a == "-g");
+            if (reWriter == null || gleen)
             {
                 @out.WriteLine("Attempting to auto-generate " + slnPrefix + ".nugetine.json");
                 Glean(@out, slnPrefix);
                 @out.WriteLine("Verify " + slnPrefix + ".nugetine.json is correct and re-run.");
-                Environment.Exit(-1);
+                Environment.Exit(0);
             }
 
             @out.WriteLine(reWriter.ToString());
@@ -31,13 +41,39 @@ namespace nugetine
             reWriter.Run();
         }
 
-        private static void Glean(TextWriter @out, string slnPrefix)
+        private static BsonDocument LoadSourceIndex()
         {
-            IGleaner gleaner = new Gleaner(@out, slnPrefix);
-            gleaner.Run();
+            var indexFile = FindInParent(Path.GetFullPath(Environment.CurrentDirectory), "source_index.nugetine.json");
+            return indexFile == null ? new BsonDocument() :
+                new BsonDocument
+                    {
+                        {"source",BsonDocument.Parse(File.ReadAllText(indexFile))},
+                        {"base",Path.GetDirectoryName(indexFile)??string.Empty},
+                    };
         }
 
-        private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix)
+        private static string FindInParent(string dir, string filename)
+        {
+            while (!string.IsNullOrWhiteSpace(dir))
+            {
+                var candidateFile = Path.Combine(dir, filename);
+                if (File.Exists(candidateFile)) return candidateFile;
+                dir = Path.GetDirectoryName(dir);
+            }
+            return null;
+        }
+
+        private static void Index(TextWriter @out)
+        {
+            new SourceIndexer(@out).Run();
+        }
+
+        private static void Glean(TextWriter @out, string slnPrefix)
+        {
+            new Gleaner(@out, slnPrefix).Run();
+        }
+
+        private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix, BsonDocument sourceIndex)
         {
             var slnNugetineFileName = slnPrefix + ".nugetine.json";
             if (!File.Exists(slnNugetineFileName))
@@ -46,7 +82,7 @@ namespace nugetine
                 return null;
             }
 
-            IReWriter reWriter = new ReWriter(@out, slnPrefix + ".sln");
+            IReWriter reWriter = new ReWriter(@out, slnPrefix + ".sln", sourceIndex);
 
             foreach (var nugetineFile in
                 Directory.EnumerateFiles(".", "*.nugetine.json")
@@ -61,8 +97,8 @@ namespace nugetine
 
         private static string DetermineSlnPrefixAndSetupEnviroment(string[] args, TextWriter @out)
         {
-            string slnName;
-            if (args.Length == 0)
+            var slnName = args.FirstOrDefault(a=>!a.StartsWith("-"));
+            if (string.IsNullOrWhiteSpace(slnName))
             {
                 var slns = Directory.EnumerateFiles(".", "*.sln").ToArray();
                 if (slns.Length == 0)
@@ -77,12 +113,9 @@ namespace nugetine
                 }
                 slnName = slns[0];
             }
-            else
-            {
-                slnName = args[0];
-            }
+
             var slnDir = Path.GetDirectoryName(slnName);
-            if (slnDir != null)
+            if (!string.IsNullOrWhiteSpace(slnDir))
             {
                 if (slnDir != ".")
                     Environment.CurrentDirectory = slnDir;
