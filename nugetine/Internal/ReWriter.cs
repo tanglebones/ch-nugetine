@@ -190,35 +190,34 @@ namespace nugetine.Internal
                 foreach (var source in _config["source"].AsBsonArray)
                     _source.Add(source.AsString);
 
-            var sourceBase = _sourceIndex.Contains("base") ? _sourceIndex["base"].AsString : null;
-            if(!string.IsNullOrWhiteSpace(sourceBase))
-                foreach (var package in _config["package"].AsBsonDocument)
-                    foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
-                        foreach (var assembly in dir.Value.AsBsonArray)
-                        {
-                            var assemblyName = assembly.AsString;
-                            if (!_source.Contains(assemblyName))
-                                _reference.Add(assemblyName);
+            var sourceBase = _sourceIndex["base"].AsString;
+            foreach (var package in _config["package"].AsBsonDocument)
+                foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
+                    foreach (var assembly in dir.Value.AsBsonArray)
+                    {
+                        var assemblyName = assembly.AsString;
+                        if (!_source.Contains(assemblyName))
+                            _reference.Add(assemblyName);
 
-                            var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
-                            var source = _sourceIndex["source"].AsBsonDocument[package.Name, string.Empty].AsString;
-                            if (!string.IsNullOrEmpty(source)) source = Path.Combine(sourceBase, source);
-                            var assemblyInfo = new BsonDocument();
+                        var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
+                        var source = _sourceIndex["source"].AsBsonDocument[package.Name, string.Empty].AsString;
+                        if (!string.IsNullOrEmpty(source)) source = Path.Combine(sourceBase, source);
+                        var assemblyInfo = new BsonDocument();
 
-                            assemblyInfo["path"] =
-                                Path.Combine(
-                                    "$(SolutionDir)",
-                                    "packages",
-                                    package.Name + "." + version,
-                                    dir.Name.Replace('/', '\\'),
-                                    assemblyName + ".dll"
-                                    );
-                            assemblyInfo["package"] = package.Name;
-                            assemblyInfo["version"] = version;
-                            assemblyInfo["source"] = source;
+                        assemblyInfo["path"] =
+                            Path.Combine(
+                                "$(SolutionDir)",
+                                "packages",
+                                package.Name + "." + version,
+                                dir.Name.Replace('/', '\\'),
+                                assemblyName + ".dll"
+                                );
+                        assemblyInfo["package"] = package.Name;
+                        assemblyInfo["version"] = version;
+                        assemblyInfo["source"] = source;
 
-                            _assemblyMapping[assemblyName.ToUpperInvariant()] = assemblyInfo;
-                    }
+                        _assemblyMapping[assemblyName.ToUpperInvariant()] = assemblyInfo;
+                }
 
             IndexCsProjs();
         }
