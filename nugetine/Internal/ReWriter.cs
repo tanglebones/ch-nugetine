@@ -87,7 +87,13 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline
                 );
 
-        private static readonly Regex RxNugetTargetsSources =
+        private static readonly Regex RxNugetTargetsSourcesV18 =
+            new Regex(
+                @"(<ItemGroup\s+Condition=""\s+'\$\(PackageSources\)'\s*==\s*''\s*"">)(.*?)(</ItemGroup>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline
+                );
+
+        private static readonly Regex RxNugetTargetsSourcesV17 =
             new Regex(
                 @"<PackageSources>([^<]+)</PackageSources>",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
@@ -134,9 +140,13 @@ namespace nugetine.Internal
             }
         }
 
+        private IEnumerable<string> Sources
+        {
+            get { return _config["nuget"].AsBsonDocument.Values.Select(x => x.AsString); }
+        } 
         private string Source
         {
-            get { return string.Join(";", _config["nuget"].AsBsonDocument.Values.Select(x => x.AsString)); }
+            get { return string.Join(";", Sources); }
         }
 
         public void LoadConfig(string path)
@@ -160,9 +170,15 @@ namespace nugetine.Internal
             const string nugetTargetsFilename = ".nuget/NuGet.targets";
             if (!File.Exists(nugetTargetsFilename)) return;
             var contents = File.ReadAllText(nugetTargetsFilename);
-            var newContents = RxNugetTargetsSources.Replace(
+            var newContents = RxNugetTargetsSourcesV17.Replace(
                 contents,
                 m => "<PackageSources>\"" + Source + "\"</PackageSources>",
+                1);
+            newContents = RxNugetTargetsSourcesV18.Replace(
+                newContents,
+                m => m.Groups[1].Value + Environment.NewLine +
+                     string.Join(Environment.NewLine, Sources.Select(x => "<PackageSource Include=\"" + x + "\"/>")) + Environment.NewLine +
+                     m.Groups[3].Value,
                 1);
             if (newContents != contents)
                 File.WriteAllText(nugetTargetsFilename, newContents);
@@ -174,34 +190,34 @@ namespace nugetine.Internal
                 foreach (var source in _config["source"].AsBsonArray)
                     _source.Add(source.AsString);
 
-            var sourceBase = _sourceIndex["base"].AsString;
+            var sourceBase = _sourceIndex.Contains("base") ? _sourceIndex["base"].AsString : null;
+            if(!string.IsNullOrWhiteSpace(sourceBase))
+                foreach (var package in _config["package"].AsBsonDocument)
+                    foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
+                        foreach (var assembly in dir.Value.AsBsonArray)
+                        {
+                            var assemblyName = assembly.AsString;
+                            if (!_source.Contains(assemblyName))
+                                _reference.Add(assemblyName);
 
-            foreach (var package in _config["package"].AsBsonDocument)
-                foreach (var dir in package.Value.AsBsonDocument["assembly"].AsBsonDocument)
-                    foreach (var assembly in dir.Value.AsBsonArray)
-                    {
-                        var assemblyName = assembly.AsString;
-                        if (!_source.Contains(assemblyName))
-                            _reference.Add(assemblyName);
+                            var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
+                            var source = _sourceIndex["source"].AsBsonDocument[package.Name, string.Empty].AsString;
+                            if (!string.IsNullOrEmpty(source)) source = Path.Combine(sourceBase, source);
+                            var assemblyInfo = new BsonDocument();
 
-                        var version = package.Value.AsBsonDocument["version", "1.0"].AsString;
-                        var source = _sourceIndex["source"].AsBsonDocument[package.Name, string.Empty].AsString;
-                        if (!string.IsNullOrEmpty(source)) source = Path.Combine(sourceBase, source);
-                        var assemblyInfo = new BsonDocument();
+                            assemblyInfo["path"] =
+                                Path.Combine(
+                                    "$(SolutionDir)",
+                                    "packages",
+                                    package.Name + "." + version,
+                                    dir.Name.Replace('/', '\\'),
+                                    assemblyName + ".dll"
+                                    );
+                            assemblyInfo["package"] = package.Name;
+                            assemblyInfo["version"] = version;
+                            assemblyInfo["source"] = source;
 
-                        assemblyInfo["path"] =
-                            Path.Combine(
-                                "$(SolutionDir)",
-                                "packages",
-                                package.Name + "." + version,
-                                dir.Name.Replace('/', '\\'),
-                                assemblyName + ".dll"
-                                );
-                        assemblyInfo["package"] = package.Name;
-                        assemblyInfo["version"] = version;
-                        assemblyInfo["source"] = source;
-
-                        _assemblyMapping[assemblyName.ToUpperInvariant()] = assemblyInfo;
+                            _assemblyMapping[assemblyName.ToUpperInvariant()] = assemblyInfo;
                     }
 
             IndexCsProjs();
@@ -345,7 +361,9 @@ namespace nugetine.Internal
                     {
                         newNuspecContents = RxDependencies.Replace(
                             nuspecContents,
+// ReSharper disable ImplicitlyCapturedClosure
                             match => "<dependencies>" +
+// ReSharper restore ImplicitlyCapturedClosure
                                      Environment.NewLine +
                                      RemoveProjectRefs(match.Groups[1].Value, projectRefs) +
                                      MakeProjectDependencies(projectRefs) +
@@ -357,7 +375,9 @@ namespace nugetine.Internal
                     {
                         newNuspecContents = RxMetaData.Replace(
                             nuspecContents,
+// ReSharper disable ImplicitlyCapturedClosure
                             match => "<metadata>" +
+// ReSharper restore ImplicitlyCapturedClosure
                                      match.Groups[1].Value +
                                      Environment.NewLine +
                                      "<dependencies>" +
@@ -427,7 +447,9 @@ namespace nugetine.Internal
                         toAddToReferences
                             .Select(
                                 assemblyName
+// ReSharper disable ImplicitlyCapturedClosure
                                 =>
+// ReSharper restore ImplicitlyCapturedClosure
                                     {
                                         var assemblyInfo =
                                             _assemblyMapping[assemblyName.ToUpperInvariant()].AsBsonDocument;
