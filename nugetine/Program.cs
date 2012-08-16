@@ -44,7 +44,12 @@ namespace nugetine
         private static BsonDocument LoadSourceIndex()
         {
             var indexFile = FindInParent(Path.GetFullPath(Environment.CurrentDirectory), "source_index.nugetine.json");
-            return indexFile == null ? new BsonDocument() :
+            return indexFile == null ?
+                new BsonDocument
+                    {
+                        {"source",new BsonDocument()},
+                        {"base", string.Empty}
+                    } :
                 new BsonDocument
                     {
                         {"source",BsonDocument.Parse(File.ReadAllText(indexFile))},
