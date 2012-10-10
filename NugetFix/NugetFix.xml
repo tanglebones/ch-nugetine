@@ -1,0 +1,118 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NugetFix</name>
+    </assembly>
+    <members>
+        <member name="M:NugetFix.NugetFixInternal.WalkSolutionFixAndUpdate">
+            The first pass of the algorithm which goes through every project in the solution to do the following:
+            update the items in the csproj references, 
+            keeps track of modified items,
+            updates packages.config
+            and saves the project if it has been modified.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.UpdateIfModified(Microsoft.Build.Evaluation.Project,System.Boolean)">
+            save the project if it has been modified.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.CheckAndProcessProjectReferenceItems(Microsoft.Build.Evaluation.Project)">
+            Part of the first pass of the algorithm.
+            Update and fix any bad item references and keep track of updated items so we can update the whole solution on the second pass.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.AddToReferenceMapIfDoesNotExistOrNewer(Microsoft.Build.Evaluation.ProjectItem)">
+            Adds the item to the ItemReferenceMap if it is not already there 
+            or if its version number is newer than the existing item reference.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.VersionNewerThan(Microsoft.Build.Evaluation.ProjectItem,Microsoft.Build.Evaluation.ProjectItem)">
+            Returns true if a's version is newer than b's, false otherwise.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.GetVersion(Microsoft.Build.Evaluation.ProjectItem)">
+            Returns the version of this reference item
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.UpdateVersionsThroughEntireSolution">
+            Assuming we have a ModifiedItems dictionary at this point, we can now walk the solution again
+            and update any stale references that need a version update.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.FixSolutionDir(Microsoft.Build.Evaluation.ProjectItem,Microsoft.Build.Evaluation.ProjectMetadata,System.Boolean@)">
+            The path should be set to $(SolutionDir) if it's not already.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.FixReferenceInclude(Microsoft.Build.Evaluation.ProjectItem,System.Boolean@)">
+            The Reference Include= should only havet he package name.
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.UpdateAppConfig(System.String)">
+            Fixes the lowerbound cap on assembly version binding
+        </member>
+        <member name="M:NugetFix.NugetFixInternal.UpdatePackagesConfig(System.String)">
+            The packages.config file should not explicitly list the target framework
+        </member>
+        <member name="T:NugetFix.Connect">
+            <summary>The object for implementing an Add-in.</summary>
+            <seealso class='IDTExtensibility2' />
+        </member>
+        <member name="M:NugetFix.Connect.#ctor">
+            <summary>Implements the constructor for the Add-in object. Place your initialization code within this method.</summary>
+        </member>
+        <member name="M:NugetFix.Connect.OnConnection(System.Object,Extensibility.ext_ConnectMode,System.Object,System.Array@)">
+            <summary>Implements the OnConnection method of the IDTExtensibility2 interface. Receives notification that the Add-in is being loaded.</summary>
+            <param term='application'>Root object of the host application.</param>
+            <param term='connectMode'>Describes how the Add-in is being loaded.</param>
+            <param term='addInInst'>Object representing this Add-in.</param>
+            <param name="application"> </param>
+            <param name="connectMode"> </param>
+            <param name="addInInst"> </param>
+            <param name="custom"> </param>
+            <seealso class='IDTExtensibility2' />
+        </member>
+        <member name="M:NugetFix.Connect.OnDisconnection(Extensibility.ext_DisconnectMode,System.Array@)">
+            <summary>Implements the OnDisconnection method of the IDTExtensibility2 interface. Receives notification that the Add-in is being unloaded.</summary>
+            <param term='disconnectMode'>Describes how the Add-in is being unloaded.</param>
+            <param term='custom'>Array of parameters that are host application specific.</param>
+            <param name="disconnectMode"> </param>
+            <param name="custom"> </param>
+            <seealso class='IDTExtensibility2' />
+        </member>
+        <member name="M:NugetFix.Connect.OnAddInsUpdate(System.Array@)">
+            <summary>Implements the OnAddInsUpdate method of the IDTExtensibility2 interface. Receives notification when the collection of Add-ins has changed.</summary>
+            <param term='custom'>Array of parameters that are host application specific.</param>
+            <param name="custom"> </param>
+            <seealso class='IDTExtensibility2' />		
+        </member>
+        <member name="M:NugetFix.Connect.OnStartupComplete(System.Array@)">
+            <summary>Implements the OnStartupComplete method of the IDTExtensibility2 interface. Receives notification that the host application has completed loading.</summary>
+            <param term='custom'>Array of parameters that are host application specific.</param>
+            <param name="custom"> </param>
+            <seealso class='IDTExtensibility2' />
+        </member>
+        <member name="M:NugetFix.Connect.OnBeginShutdown(System.Array@)">
+            <summary>Implements the OnBeginShutdown method of the IDTExtensibility2 interface. Receives notification that the host application is being unloaded.</summary>
+            <param term='custom'>Array of parameters that are host application specific.</param>
+            <param name="custom"> </param>
+            <seealso class='IDTExtensibility2' />
+        </member>
+        <member name="M:NugetFix.Connect.QueryStatus(System.String,EnvDTE.vsCommandStatusTextWanted,EnvDTE.vsCommandStatus@,System.Object@)">
+            <summary>Implements the QueryStatus method of the IDTCommandTarget interface. This is called when the command's availability is updated</summary>
+            <param term='commandName'>The name of the command to determine state for.</param>
+            <param term='neededText'>Text that is needed for the command.</param>
+            <param term='status'>The state of the command in the user interface.</param>
+            <param term='commandText'>Text requested by the neededText parameter.</param>
+            <param name="commandName"> </param>
+            <param name="neededText"> </param>
+            <param name="status"> </param>
+            <param name="commandText"> </param>
+            <seealso class='Exec' />
+        </member>
+        <member name="M:NugetFix.Connect.Exec(System.String,EnvDTE.vsCommandExecOption,System.Object@,System.Object@,System.Boolean@)">
+            <summary>Implements the Exec method of the IDTCommandTarget interface. This is called when the command is invoked.</summary>
+            <param term='commandName'>The name of the command to execute.</param>
+            <param term='executeOption'>Describes how the command should be run.</param>
+            <param term='varIn'>Parameters passed from the caller to the command handler.</param>
+            <param term='varOut'>Parameters passed from the command handler to the caller.</param>
+            <param term='handled'>Informs the caller if the command was handled or not.</param>
+            <param name="commandName"> </param>
+            <param name="executeOption"> </param>
+            <param name="varIn"> </param>
+            <param name="varOut"> </param>
+            <param name="handled"> </param>
+            <seealso class='Exec' />
+        </member>
+    </members>
+</doc>
