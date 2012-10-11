@@ -266,9 +266,11 @@ namespace NugetFix
         public static void UpdateAppConfig(string projectPath)
         {
             var filename = projectPath + @"\App.config";
-            var appConfig = File.ReadAllText(filename);
+            if (!File.Exists(filename)) return;
 
+            var appConfig = File.ReadAllText(filename);
             var appConfigXml = XDocument.Parse(appConfig);
+
             var configurationItem = appConfigXml.Element("configuration");
             if (configurationItem == null) return;
             var runtimeItem = configurationItem.Element("runtime");
@@ -300,9 +302,11 @@ namespace NugetFix
         private static void UpdatePackagesConfig(string projectPath)
         {
             var filename = projectPath + @"\packages.config";
-            var packages = File.ReadAllText(filename);
+            if (!File.Exists(filename)) return;
 
+            var packages = File.ReadAllText(filename);
             var packagesConfig = XDocument.Parse(packages);
+
             var packagesElement = packagesConfig.Element("packages");
             var modified = false;
             var refSet = new HashSet<string>();
