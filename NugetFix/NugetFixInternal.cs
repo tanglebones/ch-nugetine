@@ -13,20 +13,10 @@ namespace NugetFix
 {
     internal sealed class NugetFixInternal
     {
-        private static readonly Dictionary<string, ProjectItem> ModifiedItems = new Dictionary<string, ProjectItem>();
+        private readonly IDictionary<string, ProjectItem> _modifiedItems = new Dictionary<string, ProjectItem>();
         // we use the item reference map to keep track of the highest version for each item so that we can update packages config if necessary
-        private static readonly Dictionary<string, ProjectItem> ItemReferenceMap = new Dictionary<string, ProjectItem>();
+        private readonly IDictionary<string, ProjectItem> _itemReferenceMap = new Dictionary<string, ProjectItem>();
         private DTE2 _applicationObject;
-        private static NugetFixInternal _instance;
-
-        public static NugetFixInternal GetInstance()
-        {
-            return _instance ?? (_instance = new NugetFixInternal());
-        }
-
-        private NugetFixInternal()
-        {
-        }
 
         public void SetApplicationObject(DTE2 applicationObject)
         {
@@ -44,7 +34,7 @@ namespace NugetFix
             // walk the solution and update every item in the modified item dictionary
             UpdateVersionsThroughEntireSolution();
 
-            ModifiedItems.Clear();
+            _modifiedItems.Clear();
         }
 
         /**
@@ -93,14 +83,14 @@ namespace NugetFix
          * Part of the first pass of the algorithm.
          * Update and fix any bad item references and keep track of updated items so we can update the whole solution on the second pass.
          */
-        private static bool CheckAndProcessProjectReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
+        private bool CheckAndProcessProjectReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
         {
             var modifiedProject = false;
             // avoid non reference items and system references that have nothing to modify.
             foreach (var item in buildProject.Items.Where(i => i.ItemType == "Reference" && i.DirectMetadataCount > 0))
             {
                 ProjectItem updated;
-                if (ModifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
+                if (_modifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
                 {
                     UpdateItem(item, updated);
                     modifiedProject = true;
@@ -133,7 +123,7 @@ namespace NugetFix
                 {
                     // given the item name and reference we can walk all the other projects in the solution
                     // and simply replace any occurrence of this item with the updated version.
-                    ModifiedItems[item.EvaluatedInclude] = item;
+                    _modifiedItems[item.EvaluatedInclude] = item;
                 }
 
                 AddToReferenceMapIfDoesNotExistOrNewer(item);
@@ -145,12 +135,12 @@ namespace NugetFix
          * Adds the item to the ItemReferenceMap if it is not already there 
          * or if its version number is newer than the existing item reference.
          */
-        private static void AddToReferenceMapIfDoesNotExistOrNewer(ProjectItem item)
+        private void AddToReferenceMapIfDoesNotExistOrNewer(ProjectItem item)
         {
             ProjectItem mapItem;
-            if (!ItemReferenceMap.TryGetValue(item.EvaluatedInclude, out mapItem) || VersionNewerThan(item, mapItem))
+            if (!_itemReferenceMap.TryGetValue(item.EvaluatedInclude, out mapItem) || VersionNewerThan(item, mapItem))
             {
-                ItemReferenceMap[item.EvaluatedInclude] = item;
+                _itemReferenceMap[item.EvaluatedInclude] = item;
             }
         }
 
@@ -200,13 +190,13 @@ namespace NugetFix
             }
         }
 
-        private static bool UpdateModifiedItems(Microsoft.Build.Evaluation.Project buildProject)
+        private bool UpdateModifiedItems(Microsoft.Build.Evaluation.Project buildProject)
         {
             var modifiedProject = false;
             foreach (var item in buildProject.Items.Where(i => i.ItemType == "Reference" && i.DirectMetadataCount > 0))
             {
                 ProjectItem updated;
-                if (ModifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
+                if (_modifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
                 {
                     UpdateItem(item, updated);
                     modifiedProject = true;
@@ -299,7 +289,7 @@ namespace NugetFix
         /**
          *  The packages.config file should not explicitly list the target framework
          */
-        private static void UpdatePackagesConfig(string projectPath)
+        private void UpdatePackagesConfig(string projectPath)
         {
             var filename = projectPath + @"\packages.config";
             if (!File.Exists(filename)) return;
@@ -337,7 +327,7 @@ namespace NugetFix
 
                     // update the version if necessary
                     ProjectItem item;
-                    if (ItemReferenceMap.TryGetValue(name.Value, out item) && version != null)
+                    if (_itemReferenceMap.TryGetValue(name.Value, out item) && version != null)
                     {
                         var highestVersion = GetVersion(item);
                         if (version.Value != highestVersion)
