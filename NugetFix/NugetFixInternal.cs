@@ -316,9 +316,10 @@ namespace NugetFix
                 // attributes are set in a linked list structure:
                 // e.g. package.FirstAttribute.NextAttribute.NextAttribute
                 // we're assuming every attribute has at least an id and a version
-                // TODO: verify name and version actually exist
                 foreach (var package in packagesElement.Elements())
                 {
+                    if (!package.HasAttributes) continue;
+
                     var name = package.FirstAttribute;
                     if (!refSet.Add(name.Value))
                     {
@@ -336,7 +337,7 @@ namespace NugetFix
 
                     // update the version if necessary
                     ProjectItem item;
-                    if (ItemReferenceMap.TryGetValue(name.Value, out item))
+                    if (ItemReferenceMap.TryGetValue(name.Value, out item) && version != null)
                     {
                         var highestVersion = GetVersion(item);
                         if (version.Value != highestVersion)
