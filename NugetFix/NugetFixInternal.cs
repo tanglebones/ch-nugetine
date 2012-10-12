@@ -18,7 +18,7 @@ namespace NugetFix
         private readonly IDictionary<string, ProjectItem> _itemReferenceMap = new Dictionary<string, ProjectItem>();
         private DTE2 _applicationObject;
         private OutputWriter _out;
-        private readonly IList<string> _outputList = new List<string>();
+        private readonly ISet<string> _outputList = new SortedSet<string>();
 
         public void SetApplicationObject(DTE2 applicationObject)
         {
@@ -28,14 +28,21 @@ namespace NugetFix
 
         public void FixNugetReferences()
         {
-            // first pass: 
-            // walk the solution projects and fix every issue encountered.
-            // store item references for every modified item in a dictionary.
-            WalkSolutionFixAndUpdate();
+            try
+            {
+                // first pass: 
+                // walk the solution projects and fix every issue encountered.
+                // store item references for every modified item in a dictionary.
+                WalkSolutionFixAndUpdate();
 
-            // second pass:
-            // walk the solution and update every item in the modified item dictionary
-            UpdateVersionsThroughEntireSolution();
+                // second pass:
+                // walk the solution and update every item in the modified item dictionary
+                UpdateVersionsThroughEntireSolution();
+            }
+            catch (Exception e)
+            {
+                _out.Write("Error: " + e.Message);
+            }
 
             foreach (var item in _outputList)
             {
@@ -69,15 +76,24 @@ namespace NugetFix
                     // but for now just skip any "project" that doesn't load.
                     continue;
                 }
-
-                var modifiedProject = CheckAndProcessProjectReferenceItems(buildProject);
+                var modifiedProject = CheckAndSetSolutionDir(buildProject);
+                modifiedProject |= CheckAndProcessProjectReferenceItems(buildProject);
 
                 UpdateIfModified(buildProject, modifiedProject);
                 ProjectCollection.GlobalProjectCollection.TryUnloadProject(buildProject.Xml);
             }
         }
 
-
+        private bool CheckAndSetSolutionDir(Microsoft.Build.Evaluation.Project buildProject)
+        {
+            if (buildProject.GetProperty("SolutionDir").EvaluatedValue != "..\\")
+            {
+                buildProject.SetProperty("SolutionDir", "..\\");
+                _outputList.Add("Modified project: " + buildProject.FullPath);
+                return true;
+            }
+            return false;
+        }
 
         /**
          * save the project if it has been modified.
