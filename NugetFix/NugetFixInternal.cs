@@ -17,10 +17,13 @@ namespace NugetFix
         // we use the item reference map to keep track of the highest version for each item so that we can update packages config if necessary
         private readonly IDictionary<string, ProjectItem> _itemReferenceMap = new Dictionary<string, ProjectItem>();
         private DTE2 _applicationObject;
+        private OutputWriter _out;
+        private readonly IList<string> _outputList = new List<string>();
 
         public void SetApplicationObject(DTE2 applicationObject)
         {
             _applicationObject = applicationObject;
+            _out = new OutputWriter(_applicationObject);
         }
 
         public void FixNugetReferences()
@@ -34,7 +37,14 @@ namespace NugetFix
             // walk the solution and update every item in the modified item dictionary
             UpdateVersionsThroughEntireSolution();
 
+            foreach (var item in _outputList)
+            {
+                _out.Write(item);
+            }
+            _out.Write("Modified " + _outputList.Count + " items.");
+
             _modifiedItems.Clear();
+            _itemReferenceMap.Clear();
         }
 
         /**
@@ -181,6 +191,8 @@ namespace NugetFix
                 }
 
                 var modifiedProject = UpdateModifiedItems(buildProject);
+                _outputList.Add("Modified project: " + buildProject.FullPath);
+
                 UpdatePackagesConfig(buildProject.DirectoryPath);
 
                 UpdateAppConfig(buildProject.DirectoryPath);
@@ -229,7 +241,7 @@ namespace NugetFix
          *  The path should be set to $(SolutionDir) if it's not already.
          */
         // ReSharper disable RedundantAssignment
-        private static void FixSolutionDir(ProjectItem item, ProjectMetadata metaHint, ref bool modified)
+        private void FixSolutionDir(ProjectItem item, ProjectMetadata metaHint, ref bool modified)
         // ReSharper restore RedundantAssignment
         {
             var solutionDir = @"\$(SolutionDir)".Substring(1) + @"\packages\";
@@ -253,7 +265,7 @@ namespace NugetFix
         /**
          * Fixes the lowerbound cap on assembly version binding
          */
-        public static void UpdateAppConfig(string projectPath)
+        public void UpdateAppConfig(string projectPath)
         {
             var filename = projectPath + @"\App.config";
             if (!File.Exists(filename)) return;
@@ -281,6 +293,7 @@ namespace NugetFix
             }
             if (modified)
             {
+                _outputList.Add("Modified: " + filename);
                 appConfigXml.Save(filename);
             }
         }
@@ -344,6 +357,7 @@ namespace NugetFix
             }
             if (modified)
             {
+                _outputList.Add("Modified: " + filename);
                 packagesConfig.Save(filename);
             }
         }
