@@ -31,7 +31,7 @@ namespace NugetFix
         {
             if (_outputPane == null) return;
             _outputPane.Activate();
-            _outputPane.OutputString(msg + "\n");
+            _outputPane.OutputString(msg + Environment.NewLine);
         }
     }
 }
