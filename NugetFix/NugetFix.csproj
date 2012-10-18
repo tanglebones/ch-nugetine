@@ -62,6 +62,7 @@
     </Compile>
     <Compile Include="NugetFixInternal.cs" />
     <Compile Include="OutputWriter.cs" />
+    <Compile Include="NuPackage.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="EnvDTE">

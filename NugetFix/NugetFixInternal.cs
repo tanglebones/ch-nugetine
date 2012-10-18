@@ -13,9 +13,8 @@ namespace NugetFix
 {
     internal sealed class NugetFixInternal
     {
-        private readonly IDictionary<string, ProjectItem> _modifiedItems = new Dictionary<string, ProjectItem>();
         // we use the item reference map to keep track of the highest version for each item so that we can update packages config if necessary
-        private readonly IDictionary<string, ProjectItem> _itemReferenceMap = new Dictionary<string, ProjectItem>();
+        private readonly Dictionary<string, NuPackage> _items = new Dictionary<string, NuPackage>();
         private DTE2 _applicationObject;
         private OutputWriter _out;
         private readonly ISet<string> _outputList = new SortedSet<string>();
@@ -30,18 +29,18 @@ namespace NugetFix
         {
             try
             {
-                // first pass: 
-                // walk the solution projects and fix every issue encountered.
-                // store item references for every modified item in a dictionary.
-                WalkSolutionFixAndUpdate();
+                SaveSolution();
 
-                // second pass:
-                // walk the solution and update every item in the modified item dictionary
-                UpdateVersionsThroughEntireSolution();
+                GatherPackageAndReferences();
+
+                UpdatePackageAndReferences();
+
+                ProjectCollection.GlobalProjectCollection.UnloadAllProjects();
+                SaveSolution();
             }
             catch (Exception e)
             {
-                _out.Write("Error: " + e.Message);
+                _out.Write("Error: " + e.Message + "; StackTrace: " + e.StackTrace);
             }
 
             foreach (var item in _outputList)
@@ -50,18 +49,15 @@ namespace NugetFix
             }
             _out.Write("Modified " + _outputList.Count + " items.");
 
-            _modifiedItems.Clear();
-            _itemReferenceMap.Clear();
+            _items.Clear();
         }
 
-        /**
-         *  The first pass of the algorithm which goes through every project in the solution to do the following:
-         *  update the items in the csproj references, 
-         *  keeps track of modified items,
-         *  updates packages.config
-         *  and saves the project if it has been modified.
-         */
-        private void WalkSolutionFixAndUpdate()
+        private void SaveSolution()
+        {
+            _applicationObject.ExecuteCommand("File.SaveAll");
+        }
+
+        private void WalkTheSolution(Func<Microsoft.Build.Evaluation.Project, bool> augmentProject)
         {
             foreach (Project project in _applicationObject.Solution.Projects)
             {
@@ -72,16 +68,33 @@ namespace NugetFix
                 }
                 catch (Exception)
                 {
-                    // TODO: Handle cases such as incompatible project references
-                    // but for now just skip any "project" that doesn't load.
                     continue;
                 }
-                var modifiedProject = CheckAndSetSolutionDir(buildProject);
-                modifiedProject |= CheckAndProcessProjectReferenceItems(buildProject);
 
-                UpdateIfModified(buildProject, modifiedProject);
-                ProjectCollection.GlobalProjectCollection.TryUnloadProject(buildProject.Xml);
+                if (augmentProject != null)
+                {
+                    var modified = augmentProject(buildProject);
+                    UpdateIfModified(buildProject, modified);
+                }
             }
+        }
+
+        private void GatherPackageAndReferences()
+        {
+            Func<Microsoft.Build.Evaluation.Project, bool> toGetTheReferences = project =>
+                {
+                    var modified = CheckAndSetSolutionDir(project);
+                    GatherReferenceItems(project);
+                    return modified;
+                };
+            Func<Microsoft.Build.Evaluation.Project, bool> toGetThePackageVersions = project =>
+                {
+                    GatherPackages(project.DirectoryPath);
+                    return false;
+                };
+
+            WalkTheSolution(toGetTheReferences);
+            WalkTheSolution(toGetThePackageVersions);
         }
 
         private bool CheckAndSetSolutionDir(Microsoft.Build.Evaluation.Project buildProject)
@@ -100,74 +113,111 @@ namespace NugetFix
          */
         private void UpdateIfModified(Microsoft.Build.Evaluation.Project buildProject, bool modified)
         {
-            if (!modified) return;
-            ProjectCollection.GlobalProjectCollection.UnloadProject(buildProject);
-            buildProject.Save();
+            try
+            {
+                ProjectCollection.GlobalProjectCollection.TryUnloadProject(buildProject.Xml);
+                if (!modified) return;
+                buildProject.Save();
+                _outputList.Add("Modified project: " + buildProject.FullPath);
+            }
+            catch (Exception e)
+            {
+                _out.Write("Error while trying to unload and save project: " + buildProject.FullPath + " : " + e.Message + "; Trace: " + e.StackTrace);
+            }
         }
 
-        /**
-         * Part of the first pass of the algorithm.
-         * Update and fix any bad item references and keep track of updated items so we can update the whole solution on the second pass.
-         */
-        private bool CheckAndProcessProjectReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
+        private void GatherReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
         {
-            var modifiedProject = false;
             // avoid non reference items and system references that have nothing to modify.
             foreach (var item in buildProject.Items.Where(i => i.ItemType == "Reference" && i.DirectMetadataCount > 0))
             {
-                ProjectItem updated;
-                if (_modifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
+                FixItem(item);
+                NuPackage nuPackage;
+                if (_items.TryGetValue(item.EvaluatedInclude, out nuPackage))
                 {
-                    UpdateItem(item, updated);
-                    modifiedProject = true;
-                    continue;
-                }
-
-                var metaHint = item.GetMetadata("HintPath");
-                var metaSpecific = item.GetMetadata("SpecificVersion");
-                var hintValue = metaHint == null ? string.Empty : metaHint.EvaluatedValue;
-                var modifiedItem = false;
-                if (!string.IsNullOrWhiteSpace(hintValue) && hintValue.Contains("\\packages\\"))
-                {
-                    if (item.EvaluatedInclude.Contains(","))
+                    var currentVersion = nuPackage.Version;
+                    var itemVersion = GetVersion(item);
+                    if (currentVersion == null || String.Compare(itemVersion, currentVersion, StringComparison.Ordinal) > 0)
                     {
-                        FixReferenceInclude(item, ref modifiedProject);
-                        modifiedItem = true;
-                    }
-                    if (!hintValue.StartsWith(@"$(SolutionDir)") && hintValue.Contains("..\\packages\\"))
-                    {
-                        FixSolutionDir(item, metaHint, ref modifiedProject);
-                        modifiedItem = true;
-                    }
-                    if (metaSpecific == null)
-                    {
-                        SetSpecificVersion(item, false, ref modifiedProject);
-                        modifiedItem = true;
+                        nuPackage.Version = itemVersion;
+                        UpdateItem(nuPackage.Item, item);
+                        nuPackage.Modified = true;
                     }
                 }
-                if (modifiedItem)
+                else
                 {
-                    // given the item name and reference we can walk all the other projects in the solution
-                    // and simply replace any occurrence of this item with the updated version.
-                    _modifiedItems[item.EvaluatedInclude] = item;
+                    nuPackage = new NuPackage
+                        {
+                            Item = item,
+                            PackageName = GetItemReferenceName(item),
+                            RefName = item.EvaluatedInclude,
+                            Version = GetVersion(item),
+                            Modified = false
+                        };
+                    _items[item.EvaluatedInclude] = nuPackage;
                 }
-
-                AddToReferenceMapIfDoesNotExistOrNewer(item);
             }
-            return modifiedProject;
         }
 
-        /**
-         * Adds the item to the ItemReferenceMap if it is not already there 
-         * or if its version number is newer than the existing item reference.
-         */
-        private void AddToReferenceMapIfDoesNotExistOrNewer(ProjectItem item)
+        private string GetItemReferenceName(ProjectItem item)
         {
-            ProjectItem mapItem;
-            if (!_itemReferenceMap.TryGetValue(item.EvaluatedInclude, out mapItem) || VersionNewerThan(item, mapItem))
+            var version = GetVersion(item);
+            return Regex.Match(item.GetMetadata("HintPath").EvaluatedValue, "\\.?([^\\\\]*?)." + version + "\\\\lib\\\\").Groups[1].Value;
+        }
+
+        private void GatherPackages(string projectPath)
+        {
+            var filename = projectPath + @"\packages.config";
+            if (!File.Exists(filename)) return;
+
+            var packages = File.ReadAllText(filename);
+            var packagesConfig = XDocument.Parse(packages);
+
+            var packagesElement = packagesConfig.Element("packages");
+            if (packagesElement == null) return;
+            // attributes are set in a linked list structure:
+            // e.g. package.FirstAttribute.NextAttribute.NextAttribute
+            // we're assuming every attribute has at least an id and a version
+            foreach (var package in packagesElement.Elements())
             {
-                _itemReferenceMap[item.EvaluatedInclude] = item;
+                if (!package.HasAttributes) continue;
+
+                var name = package.FirstAttribute;
+                var version = name.NextAttribute;
+
+                var nuPacakge = _items.FirstOrDefault(i => i.Value.PackageName == name.Value).Value;
+                if (nuPacakge != null && (nuPacakge.Version == null || String.CompareOrdinal(version.Value, nuPacakge.Version) > 0))
+                {
+                    nuPacakge.Version = version.Value;
+                    nuPacakge.Modified = true;
+                }
             }
+        }
+
+        private bool FixItem(ProjectItem item)
+        {
+            var metaHint = item.GetMetadata("HintPath");
+            var metaSpecific = item.GetMetadata("SpecificVersion");
+            var hintValue = metaHint == null ? string.Empty : metaHint.UnevaluatedValue;
+
+            var changed = false;
+            if (item.EvaluatedInclude.Contains(","))
+            {
+                FixReferenceInclude(item);
+                changed = true;
+            }
+
+            if (!hintValue.StartsWith(@"$(SolutionDir)") && hintValue.Contains("..\\packages\\"))
+            {
+                FixSolutionDir(item);
+                changed = true;
+            }
+            if (metaSpecific == null)
+            {
+                SetSpecificVersion(item, false);
+                changed = true;
+            }
+            return changed;
         }
 
         /**
@@ -175,7 +225,7 @@ namespace NugetFix
          */ 
         private static bool VersionNewerThan(ProjectItem a, ProjectItem b)
         {
-            return String.Compare(GetVersion(a), GetVersion(b), StringComparison.Ordinal) > 0;
+            return String.CompareOrdinal(GetVersion(a), GetVersion(b)) > 0;
         }
 
         /**
@@ -190,43 +240,31 @@ namespace NugetFix
          * Assuming we have a ModifiedItems dictionary at this point, we can now walk the solution again
          * and update any stale references that need a version update.
          */
-        private void UpdateVersionsThroughEntireSolution()
+        private void UpdatePackageAndReferences()
         {
-            foreach (Project project in _applicationObject.Solution.Projects)
-            {
-                Microsoft.Build.Evaluation.Project buildProject;
-                try
+            Func<Microsoft.Build.Evaluation.Project, bool> toUpdatePackageAndReferences = project =>
                 {
-                    buildProject = ProjectCollection.GlobalProjectCollection.LoadProject(project.FullName);
-                }
-                catch (Exception)
-                {
-                    // TODO: Handle cases such as incompatible project references
-                    // but for now just skip any "project" that doesn't load.
-                    continue;
-                }
+                    var modifiedProject = UpdatePackagesConfig(project.DirectoryPath);
+                    modifiedProject |= UpdateReferenceItems(project);
+                    modifiedProject |= UpdateAppConfig(project.DirectoryPath);
+                    return modifiedProject;
+                };
 
-                var modifiedProject = UpdateModifiedItems(buildProject);
-                _outputList.Add("Modified project: " + buildProject.FullPath);
-
-                UpdatePackagesConfig(buildProject.DirectoryPath);
-
-                UpdateAppConfig(buildProject.DirectoryPath);
-
-                UpdateIfModified(buildProject, modifiedProject);
-                ProjectCollection.GlobalProjectCollection.TryUnloadProject(buildProject.Xml);
-            }
+            WalkTheSolution(toUpdatePackageAndReferences);
         }
 
-        private bool UpdateModifiedItems(Microsoft.Build.Evaluation.Project buildProject)
+        private bool UpdateReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
         {
             var modifiedProject = false;
             foreach (var item in buildProject.Items.Where(i => i.ItemType == "Reference" && i.DirectMetadataCount > 0))
             {
-                ProjectItem updated;
-                if (_modifiedItems.TryGetValue(item.EvaluatedInclude, out updated))
+                modifiedProject |= FixItem(item);
+                NuPackage nuPackage;
+                if (_items.TryGetValue(item.EvaluatedInclude, out nuPackage)
+                    && nuPackage.Item != null
+                    && VersionNewerThan(nuPackage.Item, item))
                 {
-                    UpdateItem(item, updated);
+                    UpdateItem(item, nuPackage.Item);
                     modifiedProject = true;
                 }
             }
@@ -245,64 +283,68 @@ namespace NugetFix
             }
         }
 
-        // ReSharper disable RedundantAssignment
-        private static void SetSpecificVersion(ProjectItem item, bool isSpecificVersion, ref bool modified)
-        // ReSharper restore RedundantAssignment
+        private static void SetSpecificVersion(ProjectItem item, bool isSpecificVersion)
         {
             item.SetMetadataValue("SpecificVersion", isSpecificVersion ? "True" : "False");
-            modified = true;
         }
 
         /**
          *  The path should be set to $(SolutionDir) if it's not already.
          */
-        // ReSharper disable RedundantAssignment
-        private void FixSolutionDir(ProjectItem item, ProjectMetadata metaHint, ref bool modified)
-        // ReSharper restore RedundantAssignment
+        private void FixSolutionDir(ProjectItem item)
         {
+            var metaHint = item.GetMetadata("HintPath");
             var solutionDir = @"\$(SolutionDir)".Substring(1) + @"\packages\";
             var newMetaHintValue = metaHint.EvaluatedValue.Replace("..\\\\packages\\", solutionDir)
                                                           .Replace("..\\packages\\", solutionDir);
             item.SetMetadataValue(metaHint.Name, newMetaHintValue);
-            modified = true;
         }
 
         /**
          *  The Reference Include= should only havet he package name.
          */
-        // ReSharper disable RedundantAssignment
-        private static void FixReferenceInclude(ProjectItem item, ref bool modified)
-        // ReSharper restore RedundantAssignment
+        private void FixReferenceInclude(ProjectItem item)
         {
             item.Rename(item.EvaluatedInclude.Split(',')[0]);
-            modified = true;
         }
 
         /**
          * Fixes the lowerbound cap on assembly version binding
          */
-        public void UpdateAppConfig(string projectPath)
+        public bool UpdateAppConfig(string projectPath)
         {
             var filename = projectPath + @"\App.config";
-            if (!File.Exists(filename)) return;
+            if (!File.Exists(filename)) return false;
 
             var appConfig = File.ReadAllText(filename);
             var appConfigXml = XDocument.Parse(appConfig);
 
             var configurationItem = appConfigXml.Element("configuration");
-            if (configurationItem == null) return;
+            if (configurationItem == null) return false;
             var runtimeItem = configurationItem.Element("runtime");
-            if (runtimeItem == null) return;
+            if (runtimeItem == null) return false;
             var modified = false;
             foreach (var assemblyBinding in runtimeItem.Elements().Where(i => i.Name.LocalName == "assemblyBinding"))
             {
                 foreach (var dependentAssembly in assemblyBinding.Elements().Where(i => i.Name.LocalName == "dependentAssembly"))
                 {
-                    foreach (var bindingRedirect in dependentAssembly.Elements().Where(i => i.Name.LocalName == "bindingRedirect"))
+                    var assemblyIdentity = dependentAssembly.Descendants().Single(d => d.Name.LocalName == "assemblyIdentity");
+                    var bindingRedirect = dependentAssembly.Descendants().Single(d => d.Name.LocalName == "bindingRedirect");
+
+                    var oldVersion = bindingRedirect.FirstAttribute.Value;
+                    var expectedOldVersion = Regex.Replace(oldVersion, "-(.*?)$", "-65535.65535.65535.65535");
+                    if (oldVersion != expectedOldVersion)
                     {
-                        var version = bindingRedirect.FirstAttribute.Value;
-                        var modifiedVersion = Regex.Replace(version, "-(.*?)$", "-65535.65535.65535.65535");
-                        bindingRedirect.SetAttributeValue("oldVersion", modifiedVersion);
+                        bindingRedirect.SetAttributeValue("oldVersion", expectedOldVersion);
+                        modified = true;
+                    }
+
+                    var newVersion = bindingRedirect.FirstAttribute.NextAttribute.Value;
+                    var name = assemblyIdentity.FirstAttribute.Value;
+                    var itemRefVersion = _items[name].Version;
+                    if (String.CompareOrdinal(itemRefVersion, newVersion) > 0)
+                    {
+                        assemblyIdentity.SetAttributeValue("newVersion", itemRefVersion);
                         modified = true;
                     }
                 }
@@ -312,16 +354,17 @@ namespace NugetFix
                 _outputList.Add("Modified: " + filename);
                 appConfigXml.Save(filename);
             }
+            return modified;
         }
 
 
         /**
          *  The packages.config file should not explicitly list the target framework
          */
-        private void UpdatePackagesConfig(string projectPath)
+        private bool UpdatePackagesConfig(string projectPath)
         {
             var filename = projectPath + @"\packages.config";
-            if (!File.Exists(filename)) return;
+            if (!File.Exists(filename)) return false;
 
             var packages = File.ReadAllText(filename);
             var packagesConfig = XDocument.Parse(packages);
@@ -355,15 +398,11 @@ namespace NugetFix
                     }
 
                     // update the version if necessary
-                    ProjectItem item;
-                    if (_itemReferenceMap.TryGetValue(name.Value, out item) && version != null)
+                    var nuPacakge = _items.FirstOrDefault(i => i.Value.PackageName == name.Value).Value;
+                    if (nuPacakge != null && String.CompareOrdinal(nuPacakge.Version, version.Value) > 0)
                     {
-                        var highestVersion = GetVersion(item);
-                        if (version.Value != highestVersion)
-                        {
-                            package.SetAttributeValue("version", highestVersion);
-                            modified = true;
-                        }
+                        package.SetAttributeValue("version", nuPacakge.Version);
+                        modified = true;
                     }
                 }
                 // Remove duplicates from the package list
@@ -375,7 +414,9 @@ namespace NugetFix
             {
                 _outputList.Add("Modified: " + filename);
                 packagesConfig.Save(filename);
+                return true;
             }
+            return false;
         }
     }
 }
