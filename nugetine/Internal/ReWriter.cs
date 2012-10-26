@@ -107,13 +107,13 @@ namespace nugetine.Internal
 
         private static readonly Regex RxPackagesConfigEntry =
             new Regex(
-                @"<None\s+Include=""packages.config""\s*/>",
+                @"Include=""packages.config""",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
         private static readonly Regex RxEndOfProject =
             new Regex(
-                @"(</Project>)",
+                @"([\r\n]</Project>)",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
