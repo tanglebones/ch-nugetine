@@ -25,16 +25,10 @@ namespace nugetine
             var slnPrefix = DetermineSlnPrefixAndSetupEnviroment(args, @out);
 
             var sourceIndex = LoadSourceIndex();
-            var reWriter = SetupReWriter(@out, slnPrefix, sourceIndex);
 
-            var gleen = args.Any(a => a == "-g");
-            if (reWriter == null || gleen)
-            {
-                @out.WriteLine("Attempting to auto-generate " + slnPrefix + ".nugetine.json");
-                Glean(@out, slnPrefix);
-                @out.WriteLine("Verify " + slnPrefix + ".nugetine.json is correct and re-run.");
-                Environment.Exit(0);
-            }
+            var gleaner = new Gleaner(@out, slnPrefix);
+
+            var reWriter = SetupReWriter(@out, slnPrefix, gleaner.Run(), sourceIndex);
 
             @out.WriteLine(reWriter.ToString());
 
@@ -78,26 +72,9 @@ namespace nugetine
             new Gleaner(@out, slnPrefix).Run();
         }
 
-        private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix, BsonDocument sourceIndex)
+        private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix, BsonDocument config, BsonDocument sourceIndex)
         {
-            var slnNugetineFileName = slnPrefix + ".nugetine.json";
-            if (!File.Exists(slnNugetineFileName))
-            {
-                @out.WriteLine("Could not find: " + slnNugetineFileName);
-                return null;
-            }
-
-            IReWriter reWriter = new ReWriter(@out, slnPrefix + ".sln", sourceIndex);
-
-            foreach (var nugetineFile in
-                Directory.EnumerateFiles(".", "*.nugetine.json")
-                    .Where(x => !x.Equals(slnNugetineFileName, StringComparison.InvariantCultureIgnoreCase)))
-                reWriter.LoadConfig(nugetineFile);
-
-            // load the sln file last, just in case it overrides something in the other files
-            reWriter.LoadConfig(slnNugetineFileName);
-
-            return reWriter;
+            return new ReWriter(@out, slnPrefix + ".sln", config, sourceIndex);
         }
 
         private static string DetermineSlnPrefixAndSetupEnviroment(string[] args, TextWriter @out)

@@ -52,7 +52,7 @@ namespace nugetine.Internal
             _slnPrefix = slnPrefix;
         }
 
-        public void Run()
+        public BsonDocument Run()
         {
             var csprojFiles = Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).ToSet();
 
@@ -139,16 +139,13 @@ namespace nugetine.Internal
                 adoc[pi.LibPath].AsBsonArray.Add(pi.AssemblyName);
             }
             
-            var nugetine =
+            return
                 new BsonDocument
                     {
                         {"nuget", nuget},
                         {"package", package},
                         {"source", new BsonArray()}
                     };
-
-            var nugetineContent = nugetine.ToJson(_settings);
-            File.WriteAllText(_slnPrefix + ".nugetine.json", nugetineContent);
         }
 
         private ComparibleRef RefComparer(PackageInfo pi)

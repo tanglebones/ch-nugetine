@@ -118,11 +118,12 @@ namespace nugetine.Internal
         private readonly ISet<string> _source = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         private IEnumerable<string> _localCsProjs;
 
-        public ReWriter(TextWriter @out, string slnFile, BsonDocument sourceIndex)
+        public ReWriter(TextWriter @out, string slnFile, BsonDocument config, BsonDocument sourceIndex)
         {
             _out = @out;
             _slnFile = slnFile;
             _sourceIndex = sourceIndex;
+            _config = config;
         }
 
         private IEnumerable<BsonDocument> Packages
@@ -147,13 +148,6 @@ namespace nugetine.Internal
         private string Source
         {
             get { return string.Join(";", Sources); }
-        }
-
-        public void LoadConfig(string path)
-        {
-            var source = File.ReadAllText(path);
-            var doc = BsonDocument.Parse(source);
-            _config.Overlay(doc);
         }
 
         public void Run()

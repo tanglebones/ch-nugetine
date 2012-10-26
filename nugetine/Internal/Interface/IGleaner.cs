@@ -1,7 +1,9 @@
+using MongoDB.Bson;
+
 namespace nugetine.Internal.Interface
 {
     internal interface IGleaner
     {
-        void Run();
+        BsonDocument Run();
     }
 }
