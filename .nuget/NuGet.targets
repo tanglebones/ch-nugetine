@@ -16,6 +16,7 @@
     <ItemGroup Condition=" '$(PackageSources)' == '' ">
 <PackageSource Include="https://nuget.org/api/v2/"/>
 <PackageSource Include="\\madsrv01\Packages"/>
+<PackageSource Include="C:\Packages"/>
 </ItemGroup>
 
     <PropertyGroup Condition=" '$(OS)' == 'Windows_NT'">

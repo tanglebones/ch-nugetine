@@ -110,7 +110,7 @@ namespace nugetine.Internal
                 var refs = packageRefs.Where(pi => pi.AssemblyName == name).ToArray();
                 if (refs.Length <= 1) continue;
 
-                _out.WriteLine("Muliple differing refs to " + name + " please check resulting file carefully.");
+                _out.WriteLine("Muliple differing refs to " + name + " things might not work, oh well.");
                 var byPreferred = refs.OrderByDescending(RefComparer).ToArray();
                 _out.WriteLine("\tPicking " + byPreferred[0].Path);
                 foreach (var r in byPreferred.Skip(1)) packageRefs.Remove(r);
