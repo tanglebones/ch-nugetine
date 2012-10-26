@@ -158,11 +158,13 @@ namespace nugetine.Internal
 
         private class ComparibleRef : IComparable<ComparibleRef>
         {
+            private readonly bool _packagesRef;
             private readonly bool _client;
             private readonly long[] _ver;
 
             public ComparibleRef(PackageInfo pi)
             {
+                _packagesRef = pi.LibPath.ToUpperInvariant().Contains("PACKAGES");
                 _client = pi.LibPath.ToUpperInvariant().Contains("CLIENT");
                 _ver = pi.Version
                     .Split('.')
@@ -176,12 +178,15 @@ namespace nugetine.Internal
 
             public int CompareTo(ComparibleRef other)
             {
+                if (_packagesRef && !other._packagesRef) return -1;
+
                 for (var i = 0; i < _ver.Length; ++i)
                 {
                     if (i >= other._ver.Length) return 1;
                     if (_ver[i] > other._ver[i]) return 1;
                     if (_ver[i] < other._ver[i]) return -1;
                 }
+
                 if (_client && !other._client) return -1;
                 return 0;
             }
