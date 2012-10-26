@@ -105,6 +105,18 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
+        private static readonly Regex RxPackagesConfigEntry =
+            new Regex(
+                @"<None\s+Include=""packages.config""\s*/>",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+                );
+
+        private static readonly Regex RxEndOfProject =
+            new Regex(
+                @"(</Project>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+                );
+
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
         private readonly BsonDocument _config = new BsonDocument();
 
@@ -516,6 +528,17 @@ namespace nugetine.Internal
                         1
                         );
                 }
+            }
+
+            // make sure packages.config is in the .csproj
+
+            if (!RxPackagesConfigEntry.Match(newCsprojContents).Success)
+            {
+                newCsprojContents = RxEndOfProject.Replace(
+                newCsprojContents,
+                match => "  <ItemGroup>" + Environment.NewLine + "    <None Include=\"packages.config\" />" + Environment.NewLine + "  </ItemGroup>" + Environment.NewLine + match.Groups[1].Value,
+                1
+                );
             }
 
             if (csprojContents != newCsprojContents)
