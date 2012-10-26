@@ -105,6 +105,18 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
+        private static readonly Regex RxPackagesConfigEntry =
+            new Regex(
+                @"Include=""packages.config""",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+                );
+
+        private static readonly Regex RxEndOfProject =
+            new Regex(
+                @"([\r\n]</Project>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+                );
+
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
         private readonly BsonDocument _config = new BsonDocument();
 
@@ -118,11 +130,12 @@ namespace nugetine.Internal
         private readonly ISet<string> _source = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         private IEnumerable<string> _localCsProjs;
 
-        public ReWriter(TextWriter @out, string slnFile, BsonDocument sourceIndex)
+        public ReWriter(TextWriter @out, string slnFile, BsonDocument config, BsonDocument sourceIndex)
         {
             _out = @out;
             _slnFile = slnFile;
             _sourceIndex = sourceIndex;
+            _config = config;
         }
 
         private IEnumerable<BsonDocument> Packages
@@ -147,13 +160,6 @@ namespace nugetine.Internal
         private string Source
         {
             get { return string.Join(";", Sources); }
-        }
-
-        public void LoadConfig(string path)
-        {
-            var source = File.ReadAllText(path);
-            var doc = BsonDocument.Parse(source);
-            _config.Overlay(doc);
         }
 
         public void Run()
@@ -522,6 +528,17 @@ namespace nugetine.Internal
                         1
                         );
                 }
+            }
+
+            // make sure packages.config is in the .csproj
+
+            if (!RxPackagesConfigEntry.Match(newCsprojContents).Success)
+            {
+                newCsprojContents = RxEndOfProject.Replace(
+                newCsprojContents,
+                match => "  <ItemGroup>" + Environment.NewLine + "    <None Include=\"packages.config\" />" + Environment.NewLine + "  </ItemGroup>" + Environment.NewLine + match.Groups[1].Value,
+                1
+                );
             }
 
             if (csprojContents != newCsprojContents)

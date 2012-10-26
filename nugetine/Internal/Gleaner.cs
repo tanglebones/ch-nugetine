@@ -52,7 +52,7 @@ namespace nugetine.Internal
             _slnPrefix = slnPrefix;
         }
 
-        public void Run()
+        public BsonDocument Run()
         {
             var csprojFiles = Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories).ToSet();
 
@@ -110,7 +110,7 @@ namespace nugetine.Internal
                 var refs = packageRefs.Where(pi => pi.AssemblyName == name).ToArray();
                 if (refs.Length <= 1) continue;
 
-                _out.WriteLine("Muliple differing refs to " + name + " please check resulting file carefully.");
+                _out.WriteLine("Muliple differing refs to " + name + " things might not work, oh well.");
                 var byPreferred = refs.OrderByDescending(RefComparer).ToArray();
                 _out.WriteLine("\tPicking " + byPreferred[0].Path);
                 foreach (var r in byPreferred.Skip(1)) packageRefs.Remove(r);
@@ -139,16 +139,13 @@ namespace nugetine.Internal
                 adoc[pi.LibPath].AsBsonArray.Add(pi.AssemblyName);
             }
             
-            var nugetine =
+            return
                 new BsonDocument
                     {
                         {"nuget", nuget},
                         {"package", package},
                         {"source", new BsonArray()}
                     };
-
-            var nugetineContent = nugetine.ToJson(_settings);
-            File.WriteAllText(_slnPrefix + ".nugetine.json", nugetineContent);
         }
 
         private ComparibleRef RefComparer(PackageInfo pi)
@@ -158,11 +155,13 @@ namespace nugetine.Internal
 
         private class ComparibleRef : IComparable<ComparibleRef>
         {
+            private readonly bool _packagesRef;
             private readonly bool _client;
             private readonly long[] _ver;
 
             public ComparibleRef(PackageInfo pi)
             {
+                _packagesRef = pi.LibPath.ToUpperInvariant().Contains("PACKAGES");
                 _client = pi.LibPath.ToUpperInvariant().Contains("CLIENT");
                 _ver = pi.Version
                     .Split('.')
@@ -176,12 +175,15 @@ namespace nugetine.Internal
 
             public int CompareTo(ComparibleRef other)
             {
+                if (_packagesRef && !other._packagesRef) return -1;
+
                 for (var i = 0; i < _ver.Length; ++i)
                 {
                     if (i >= other._ver.Length) return 1;
                     if (_ver[i] > other._ver[i]) return 1;
                     if (_ver[i] < other._ver[i]) return -1;
                 }
+
                 if (_client && !other._client) return -1;
                 return 0;
             }
