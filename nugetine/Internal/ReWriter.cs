@@ -297,7 +297,7 @@ namespace nugetine.Internal
             newSlnContents = RxSlnProjectEnd
                 .Replace(
                     newSlnContents,
-                    match => "EndProject" + Environment.NewLine + projects,
+                    match => "EndProject" + projects,
                     1
                 );
             File.WriteAllText(_slnFile + FilePostFix, newSlnContents);
