@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -24,6 +25,43 @@ namespace NugetFix
         {
             _applicationObject = applicationObject;
             _out = new OutputWriter(_applicationObject);
+        }
+
+        public void Print(string msg)
+        {
+            _out.Write(msg);
+        }
+
+        public void RunNugetine()
+        {
+            SaveSolution();
+
+            var solutionPath = _applicationObject.Solution.FullName;
+            var consoleProcess = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "nugetine.exe",
+                    Arguments = solutionPath,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                }
+            };
+            consoleProcess.Start();
+            while (!consoleProcess.StandardOutput.EndOfStream)
+            {
+                var line = consoleProcess.StandardOutput.ReadLine();
+                _outputList.Add(line);
+            }
+
+            SaveSolution();
+
+            foreach (var item in _outputList)
+            {
+                _out.Write(item);
+            }
+            _outputList.Clear();
         }
 
         public void FixNugetReferences()
@@ -337,13 +375,15 @@ namespace NugetFix
             SaveSolution();
         }
 
-        private void AddAppConfigToCSProjIfNecessary(Microsoft.Build.Evaluation.Project project)
+/*
+        private void AddAppConfigToCsProjIfNecessary(Microsoft.Build.Evaluation.Project project)
         {
             if (!project.Items.Any(i => i.ItemType == "None" && i.EvaluatedInclude == "App.config"))
             {
                 project.AddItem("None", "App.config");
             }
         }
+*/
 
         private bool UpdateReferenceItems(Microsoft.Build.Evaluation.Project buildProject)
         {
