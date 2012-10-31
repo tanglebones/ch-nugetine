@@ -54,19 +54,14 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyClassifier\Classifier.cs" />
-    <Compile Include="AssemblyClassifier\Isolated.cs" />
     <Compile Include="AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Connect.cs">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="AssemblyClassifier\Interface\IClassifier.cs" />
     <Compile Include="NugetFixInternal.cs" />
-    <Compile Include="NugetFixInternalHelper.cs" />
     <Compile Include="OutputWriter.cs" />
-    <Compile Include="NuPackage.cs" />
     <Compile Include="Templates\AppConfig.cs" />
   </ItemGroup>
   <ItemGroup>
