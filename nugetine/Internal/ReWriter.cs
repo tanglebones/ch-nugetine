@@ -58,12 +58,6 @@ namespace nugetine.Internal
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
-        private static readonly Regex RxDependentAssembly =
-            new Regex(
-                @"<dependentAssembly>[\s\S]+?name=""(.*?)""[\s\S]+?oldVersion=""0.0.0.0-(.*?)"" newVersion=""(.*?)""[\s\S]+?</dependentAssembly>",
-                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
-                );
-
         private static readonly Regex RxDependency =
             new Regex(
                 @"<dependency[^>]*?id=""([^""]+)""[^>]*?/>",
@@ -141,10 +135,6 @@ namespace nugetine.Internal
                 @"<ItemGroup>\s+(<Content Include=.*?)</ItemGroup>",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
-
-        const string OldVersionCap = "65535.65535.65535.65535";
-
-        private static readonly string DependentAssemblyTag = ParseTag(AppConfig.DependentAssembly);
 
         private static string ParseTag(IEnumerable<string> tag)
         {
@@ -380,98 +370,6 @@ namespace nugetine.Internal
         private string GetCsProjFileName(string projectDir)
         {
             return Directory.GetFiles(projectDir).FirstOrDefault(f => f.EndsWith(".csproj"));
-        }
-
-        private bool UpdateConfig(ref string content)
-        {
-            if (!content.Contains("<assemblyBinding"))
-            {
-                var assemblyBinding = ParseTag(AppConfig.AssemblyBinding);
-                if (RxStartOfAssemblyBinding.IsMatch(content))
-                {
-                    content = RxStartOfAssemblyBinding.Replace(
-                        content,
-                        match => "<runtime>" 
-                            + Environment.NewLine 
-                            + assemblyBinding,
-                        1
-                        );
-                }
-            }
-
-            var modified = false;
-            foreach (var assembly in _config["package"].AsBsonDocument.Where(t => t.Value.AsBsonDocument.Contains("assemblyInfo")))
-            {
-                modified |= AddDependentAssembly(ref content, assembly);
-            }
-
-            return modified;
-        }
-
-        private bool AddDependentAssembly(ref string content, BsonElement assembly)
-        {
-            // if we already have a redirect tag see if it needs an update
-            var modified = false;
-            if (RxDependentAssembly.IsMatch(content))
-            {
-                content = RxDependentAssembly
-                .Replace(
-                    content,
-                    match =>
-                    {
-                        var assemblyName = match.Groups[1].Value;                      
-                        var oldVersion = match.Groups[2].Value;
-                        var newVersion = match.Groups[3].Value;
-
-                        var names = new List<string>();
-                        foreach (var nameArray in assembly.Value.AsBsonDocument["assembly"].AsBsonDocument.Elements.Select(e => e.Value.AsBsonArray))
-                        {
-                            names.AddRange(nameArray.Select(e => e.AsString));
-                        }
-
-                        var newContent = String.Empty;
-                        foreach (var name in names)
-                        {
-                            // don't change content unless it's the relevant tag and it needs an update
-                            if (assemblyName == name
-                                && (oldVersion != OldVersionCap 
-                                || string.CompareOrdinal(assembly.Value.AsBsonDocument["version"].AsString, newVersion) > 0))
-                            {
-                                newContent += AddDependency(assembly, name, newVersion);
-                            }
-                            else
-                            {
-                                newContent += String.Empty;  
-                            }
-                        }
-                        modified |= !String.IsNullOrWhiteSpace(newContent);
-                        return String.IsNullOrWhiteSpace(newContent) ? match.Value : newContent;
-                    }
-                );
-            }
-            return modified;
-        }
-
-        private string AddDependency(BsonElement assembly, BsonValue name, string version)
-        {
-            var assemblyDoc = assembly.Value.AsBsonDocument;
-            var tag = String.Empty;
-            BsonValue assemblyInfo;
-            if (assemblyDoc.TryGetValue("assemblyInfo", out assemblyInfo))
-            {
-                BsonValue publicKeyToken, assemblyVersion;
-                if (assemblyInfo.AsBsonDocument.TryGetValue("publicKeyToken", out publicKeyToken) &&
-                    assemblyInfo.AsBsonDocument.TryGetValue("assemblyVersion", out assemblyVersion))
-                {
-                    tag =
-                        DependentAssemblyTag.Replace("$NAME", name.AsString)
-                                            .Replace("$TOKEN", publicKeyToken.AsString);
-                            tag = tag.Replace("$NEW_VERSION", string.CompareOrdinal(assemblyVersion.AsString, version) > 0
-                                ? assemblyVersion.AsString
-                                : version);
-                }
-            }
-            return tag;
         }
 
         [EnvironmentPermission(SecurityAction.LinkDemand, Unrestricted = true)]

@@ -62,7 +62,6 @@
     </Compile>
     <Compile Include="NugetFixInternal.cs" />
     <Compile Include="OutputWriter.cs" />
-    <Compile Include="Templates\AppConfig.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="EnvDTE">
