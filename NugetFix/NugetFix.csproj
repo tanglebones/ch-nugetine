@@ -64,6 +64,7 @@
     </Compile>
     <Compile Include="AssemblyClassifier\Interface\IClassifier.cs" />
     <Compile Include="NugetFixInternal.cs" />
+    <Compile Include="NugetFixInternalHelper.cs" />
     <Compile Include="OutputWriter.cs" />
     <Compile Include="NuPackage.cs" />
     <Compile Include="Templates\AppConfig.cs" />

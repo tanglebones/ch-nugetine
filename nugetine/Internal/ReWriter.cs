@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using nugetine.Internal.Interface;
+using nugetine.Internal.Templates;
 
 namespace nugetine.Internal
 {
@@ -18,6 +19,18 @@ namespace nugetine.Internal
         private static readonly Regex RxReference =
             new Regex(
                 @"<Reference\s+Include\s*=\s*""([^""]+)""\s*(?:/>|>(.*?)</Reference>)",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxAssemblyBindingBlock =
+            new Regex(
+                @"<assemblyBinding(.*?)</assemblyBinding>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxItemGroupNoneInclude =
+            new Regex(
+                @"<ItemGroup>\s+(<None Include=.*?)</ItemGroup>",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
@@ -33,9 +46,21 @@ namespace nugetine.Internal
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
+        private static readonly Regex RxStartOfAssemblyBinding =
+            new Regex(
+                @"<runtime>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
         private static readonly Regex RxDependencies =
             new Regex(
                 @"<dependencies>(.*?)</dependencies>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        private static readonly Regex RxDependentAssembly =
+            new Regex(
+                @"<dependentAssembly>[\s\S]+?name=""(.*?)""[\s\S]+?oldVersion=""0.0.0.0-(.*?)"" newVersion=""(.*?)""[\s\S]+?</dependentAssembly>",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
@@ -105,17 +130,28 @@ namespace nugetine.Internal
                 RegexOptions.IgnoreCase | RegexOptions.Compiled
                 );
 
-        private static readonly Regex RxPackagesConfigEntry =
-            new Regex(
-                @"Include=""packages.config""",
-                RegexOptions.IgnoreCase | RegexOptions.Compiled
-                );
-
         private static readonly Regex RxEndOfProject =
             new Regex(
-                @"([\r\n]</Project>)",
-                RegexOptions.IgnoreCase | RegexOptions.Compiled
+                @"\s+-->\s+</Project>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
+
+        private static readonly Regex RxItemGroupContentInclude =
+            new Regex(
+                @"<ItemGroup>\s+(<Content Include=.*?)</ItemGroup>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
+        const string OldVersionCap = "65535.65535.65535.65535";
+
+        private static readonly string DependentAssemblyTag = ParseTag(AppConfig.DependentAssembly);
+
+        private static string ParseTag(IEnumerable<string> tag)
+        {
+            var res = tag.Aggregate("", (current, line) => current + (line + Environment.NewLine));
+            res = res.Substring(0, res.LastIndexOf(Environment.NewLine, StringComparison.Ordinal));
+            return res;
+        }
 
         private readonly BsonDocument _assemblyMapping = new BsonDocument();
         private readonly BsonDocument _config = new BsonDocument();
@@ -169,6 +205,7 @@ namespace nugetine.Internal
             RewriteCsProjs();
             RewriteSln();
             RewriteNugetTargets();
+            RewriteConfigs();
         }
 
         private void RewriteNugetTargets()
@@ -232,6 +269,209 @@ namespace nugetine.Internal
         {
             foreach (var csproj in _localCsProjs)
                 ProcessCsProj(csproj);
+        }
+
+        private void RewriteConfigs()
+        {
+            foreach (var dir in _localCsProjs
+                .Select(Path.GetDirectoryName)
+                .Select(projectDir => Path.Combine(Directory.GetCurrentDirectory(), projectDir)))
+            {
+                ProcessAppConfig(dir);
+                ProcessWebConfig(dir);
+            }
+        }
+
+        private void ProcessAppConfig(string dir)
+        {
+            if (File.Exists(dir + @"\web.config") || File.Exists(dir + @"\Web.config")) return;
+            ProcessConfig(dir, "App.config");
+        }
+
+        private void ProcessWebConfig(string dir)
+        {
+            if (File.Exists(dir + @"\app.config") || File.Exists(dir + @"\App.config")) return;
+            ProcessConfig(dir, "Web.config");
+        }
+
+        private void ProcessConfig(string projectDir, string filename)
+        {
+            var lowerFilenamePath = projectDir + @"\" + char.ToLower(filename[0]) + filename.Substring(1);
+            var filenamePath = projectDir + @"\" + filename;
+            string content;
+            var csProjFilename = GetCsProjFileName(projectDir);
+            var directoryFiles = Directory.GetFiles(projectDir);
+            if (directoryFiles.Contains(lowerFilenamePath) || directoryFiles.Contains(filenamePath))
+            {
+                if (directoryFiles.Contains(lowerFilenamePath))
+                {
+                    // Rename
+                    File.Move(lowerFilenamePath, filenamePath);
+                    var updatedCsProj = filename == "Web.config" 
+                        ? AddIncludeToExistingItemGroup(File.ReadAllText(csProjFilename), filename, "Content", RxItemGroupContentInclude) 
+                        : AddNoneTag(File.ReadAllText(csProjFilename), filename);
+                    File.WriteAllText(csProjFilename, updatedCsProj);
+                }
+
+                content = File.ReadAllText(filenamePath);
+            }
+            else
+            {
+                // create new from template
+                content = ParseTag(AppConfig.EmptyConfig);
+            }
+            //var modified = UpdateConfig(ref content);
+            var modified = SetAssemblyContent(ref content);
+            if (modified)
+            {
+                File.WriteAllText(filenamePath, content);
+                var updatedCsProj = filename == "Web.config"
+                        ? AddIncludeToExistingItemGroup(File.ReadAllText(csProjFilename), filename, "Content", RxItemGroupContentInclude)
+                        : AddNoneTag(File.ReadAllText(csProjFilename), filename);
+                File.WriteAllText(csProjFilename, updatedCsProj);
+            }
+        }
+
+        private bool SetAssemblyContent(ref string content)
+        {
+            var result = new StringBuilder();
+            foreach (var tag in from redirectItem in _config["assemblyBindingBlock"].AsBsonDocument 
+                                let tag = ParseTag(AppConfig.DependentAssemblyBlock) 
+                                let name = redirectItem.Name 
+                                let version = redirectItem.Value.AsBsonDocument["version"].AsString 
+                                let token = redirectItem.Value.AsBsonDocument["token"].AsString 
+                                select tag.Replace("$NAME", name).Replace("$TOKEN", token).Replace("$NEW_VERSION", version))
+            {
+                result.Append(tag);
+                result.Append(Environment.NewLine);
+            }
+            result.Length -= Environment.NewLine.Length;
+            AddAssemblyBindingTagIfMissing(ref content);
+            if (RxAssemblyBindingBlock.IsMatch(content))
+            {
+                content = RxAssemblyBindingBlock.Replace(
+                    content,
+                    match => "<assemblyBinding>" 
+                        + Environment.NewLine 
+                        + result.ToString()
+                        + Environment.NewLine
+                        + "    </assemblyBinding>",
+                    1
+                    );
+            }
+            return ParseTag(AppConfig.EmptyConfig) != content;
+        }
+
+        private void AddAssemblyBindingTagIfMissing(ref string content)
+        {
+            if (RxAssemblyBindingBlock.IsMatch(content)) return;
+            var assemblyBindingTags = ParseTag(AppConfig.AssemblyBinding);
+            if (RxStartOfAssemblyBinding.IsMatch(content))
+            {
+                content = RxStartOfAssemblyBinding.Replace(
+                    content,
+                    match => "<runtime>"
+                             + Environment.NewLine
+                             + assemblyBindingTags
+                    );
+            }
+        }
+
+        private string GetCsProjFileName(string projectDir)
+        {
+            return Directory.GetFiles(projectDir).FirstOrDefault(f => f.EndsWith(".csproj"));
+        }
+
+        private bool UpdateConfig(ref string content)
+        {
+            if (!content.Contains("<assemblyBinding"))
+            {
+                var assemblyBinding = ParseTag(AppConfig.AssemblyBinding);
+                if (RxStartOfAssemblyBinding.IsMatch(content))
+                {
+                    content = RxStartOfAssemblyBinding.Replace(
+                        content,
+                        match => "<runtime>" 
+                            + Environment.NewLine 
+                            + assemblyBinding,
+                        1
+                        );
+                }
+            }
+
+            var modified = false;
+            foreach (var assembly in _config["package"].AsBsonDocument.Where(t => t.Value.AsBsonDocument.Contains("assemblyInfo")))
+            {
+                modified |= AddDependentAssembly(ref content, assembly);
+            }
+
+            return modified;
+        }
+
+        private bool AddDependentAssembly(ref string content, BsonElement assembly)
+        {
+            // if we already have a redirect tag see if it needs an update
+            var modified = false;
+            if (RxDependentAssembly.IsMatch(content))
+            {
+                content = RxDependentAssembly
+                .Replace(
+                    content,
+                    match =>
+                    {
+                        var assemblyName = match.Groups[1].Value;                      
+                        var oldVersion = match.Groups[2].Value;
+                        var newVersion = match.Groups[3].Value;
+
+                        var names = new List<string>();
+                        foreach (var nameArray in assembly.Value.AsBsonDocument["assembly"].AsBsonDocument.Elements.Select(e => e.Value.AsBsonArray))
+                        {
+                            names.AddRange(nameArray.Select(e => e.AsString));
+                        }
+
+                        var newContent = String.Empty;
+                        foreach (var name in names)
+                        {
+                            // don't change content unless it's the relevant tag and it needs an update
+                            if (assemblyName == name
+                                && (oldVersion != OldVersionCap 
+                                || string.CompareOrdinal(assembly.Value.AsBsonDocument["version"].AsString, newVersion) > 0))
+                            {
+                                newContent += AddDependency(assembly, name, newVersion);
+                            }
+                            else
+                            {
+                                newContent += String.Empty;  
+                            }
+                        }
+                        modified |= !String.IsNullOrWhiteSpace(newContent);
+                        return String.IsNullOrWhiteSpace(newContent) ? match.Value : newContent;
+                    }
+                );
+            }
+            return modified;
+        }
+
+        private string AddDependency(BsonElement assembly, BsonValue name, string version)
+        {
+            var assemblyDoc = assembly.Value.AsBsonDocument;
+            var tag = String.Empty;
+            BsonValue assemblyInfo;
+            if (assemblyDoc.TryGetValue("assemblyInfo", out assemblyInfo))
+            {
+                BsonValue publicKeyToken, assemblyVersion;
+                if (assemblyInfo.AsBsonDocument.TryGetValue("publicKeyToken", out publicKeyToken) &&
+                    assemblyInfo.AsBsonDocument.TryGetValue("assemblyVersion", out assemblyVersion))
+                {
+                    tag =
+                        DependentAssemblyTag.Replace("$NAME", name.AsString)
+                                            .Replace("$TOKEN", publicKeyToken.AsString);
+                            tag = tag.Replace("$NEW_VERSION", string.CompareOrdinal(assemblyVersion.AsString, version) > 0
+                                ? assemblyVersion.AsString
+                                : version);
+                }
+            }
+            return tag;
         }
 
         [EnvironmentPermission(SecurityAction.LinkDemand, Unrestricted = true)]
@@ -531,15 +771,7 @@ namespace nugetine.Internal
             }
 
             // make sure packages.config is in the .csproj
-
-            if (!RxPackagesConfigEntry.Match(newCsprojContents).Success)
-            {
-                newCsprojContents = RxEndOfProject.Replace(
-                newCsprojContents,
-                match => "  <ItemGroup>" + Environment.NewLine + "    <None Include=\"packages.config\" />" + Environment.NewLine + "  </ItemGroup>" + Environment.NewLine + match.Groups[1].Value,
-                1
-                );
-            }
+            newCsprojContents = AddNoneTag(newCsprojContents, "packages.config");
 
             if (csprojContents != newCsprojContents)
             {
@@ -557,6 +789,69 @@ namespace nugetine.Internal
                 + "</packages>"
                 ;
             File.WriteAllText(packagesConfigFileName, newPackagesConfigContents);
+        }
+
+        private static string AddIncludeToExistingItemGroup(string content, string include, string contentType, Regex rx)
+        {
+            content = content.Replace(include.ToLowerInvariant(), include);
+            if (content.Contains("Include=\"" + include + "\""))
+            {
+                return content;
+            }
+            content = rx.Replace(
+                content,
+                match =>
+                    {
+                        var insideBlock = match.Groups[1].Value;
+                        var result = "<ItemGroup>"
+                                     + Environment.NewLine
+                                     + "    "
+                                     + insideBlock;
+                        if (!insideBlock.Contains(include))
+                        {
+                            result += "  <" + contentType + " Include=\""
+                                      + include + "\" />"
+                                      + Environment.NewLine
+                                      + "  ";
+                        }
+                        result += "</ItemGroup>";
+                        return result;
+                    },
+                1
+            );
+            return content;
+        }
+
+        private string AddNoneTag(string content, string include)
+        {
+            if (content.Contains("Include=\"" + include + "\""))
+            {
+                return content;
+            }
+            // if there's already an include item, put it where it is
+            if (RxItemGroupNoneInclude.IsMatch(content))
+            {
+                return AddIncludeToExistingItemGroup(content, include, "None", RxItemGroupNoneInclude);
+            }
+
+            // otherwise, put it in another ItemGroup at the end of the project
+            content = RxEndOfProject.Replace(
+                content,
+                match =>
+                    {
+                        var result =
+                        Environment.NewLine
+                        + "  <ItemGroup>"
+                        + Environment.NewLine
+                        + "    <None Include=\"" + include + "\" />"
+                        + Environment.NewLine
+                        + "  </ItemGroup>"
+                        + match.Groups[0].Value;
+                        return result;
+                    },
+                1
+            );
+            return content;
         }
 
         private string RemoveProjectRefs(string value, ISet<string> projectRefs)

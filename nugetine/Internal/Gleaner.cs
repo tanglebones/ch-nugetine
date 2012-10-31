@@ -32,6 +32,8 @@ namespace nugetine.Internal
                 );
 
         private readonly TextWriter _out;
+
+        private readonly Classifier _classifier = new Classifier();
         private readonly string _slnPrefix;
 
         private readonly JsonWriterSettings _settings =
@@ -99,7 +101,10 @@ namespace nugetine.Internal
                     var version = string.Join(".", pathNameBits.Skip(i));
                     var libPath = string.Join(Path.DirectorySeparatorChar.ToString(CultureInfo.InvariantCulture),
                                                 pathBits, 1, pathBits.Length - 2);
-                    packageRefs.Add(new PackageInfo(assemblyName, packageName, version, libPath));
+                    var assemblyInfo = GetAssemblyInfo(
+                        Directory.GetCurrentDirectory() + @"\packages\" +
+                        Path.Combine(packageName + "." + version, libPath, assemblyName + ".dll"));
+                    packageRefs.Add(new PackageInfo(assemblyName, packageName, version, libPath, assemblyInfo));
                     assemblies.Add(assemblyName);
                 }
             }
@@ -137,29 +142,87 @@ namespace nugetine.Internal
                 if (!adoc.Contains(pi.LibPath))
                     adoc[pi.LibPath] = new BsonArray();
                 adoc[pi.LibPath].AsBsonArray.Add(pi.AssemblyName);
+                if (!package[pi.PackageName].AsBsonDocument.Contains("assemblyInfo"))
+                {
+                    var assemblyInfoDoc = new BsonDocument();
+                    string pkt;
+                    if (pi.AssemblyInfo.TryGetValue("publicKeyToken", out pkt))
+                    {
+                        assemblyInfoDoc["publicKeyToken"] = pkt;
+                    }
+                    string assemblyVersion;
+                    if (pi.AssemblyInfo.TryGetValue("assemblyVersion", out assemblyVersion))
+                    {
+                        assemblyInfoDoc["assemblyVersion"] = assemblyVersion;
+                    }
+                    if (assemblyInfoDoc.ElementCount > 0)
+                    {
+                        package[pi.PackageName].AsBsonDocument["assemblyInfo"] = assemblyInfoDoc;
+                    }
+                }
             }
+
+            var assemblyBindingBlock = GenerateAssemblyBindingBlock(package);
             
             return
                 new BsonDocument
                     {
                         {"nuget", nuget},
                         {"package", package},
-                        {"source", new BsonArray()}
+                        {"source", new BsonArray()},
+                        {"assemblyBindingBlock", assemblyBindingBlock}
                     };
+
         }
 
-        private ComparibleRef RefComparer(PackageInfo pi)
+        private BsonDocument GenerateAssemblyBindingBlock(BsonDocument package)
         {
-            return new ComparibleRef(pi);
+            var result = new BsonDocument();
+            foreach (var p in package.Elements)
+            {
+                var names = new List<string>();
+                foreach (var nameArray in p.Value.AsBsonDocument["assembly"].AsBsonDocument.Elements.Select(e => e.Value.AsBsonArray))
+                {
+                    names.AddRange(nameArray.Select(e => e.AsString));
+                }
+                foreach (var name in names)
+                {
+                    BsonValue assemblyInfo, assemblyToken, assemblyVersion;
+                    if (p.Value.AsBsonDocument.TryGetValue("assemblyInfo", out assemblyInfo)
+                        && assemblyInfo.AsBsonDocument.TryGetValue("publicKeyToken", out assemblyToken)
+                        && assemblyInfo.AsBsonDocument.TryGetValue("assemblyVersion", out assemblyVersion))
+                    {
+                        var item = new BsonDocument();
+                        item["token"] = assemblyToken.AsString;
+                        item["version"] = assemblyVersion.AsString;
+                        result[name] = item;
+                    }
+                }
+            }
+            return result;
         }
 
-        private class ComparibleRef : IComparable<ComparibleRef>
+        private IDictionary<string, string> GetAssemblyInfo(string assemblyPath)
+        {
+            if (!File.Exists(assemblyPath))
+            {
+                return null;
+            }
+            return _classifier.Classify(assemblyPath);
+        }
+
+        private ComparableRef RefComparer(PackageInfo pi)
+        {
+            return new ComparableRef(pi);
+        }
+
+        private class ComparableRef : IComparable<ComparableRef>
         {
             private readonly bool _packagesRef;
             private readonly bool _client;
             private readonly long[] _ver;
 
-            public ComparibleRef(PackageInfo pi)
+            public ComparableRef(PackageInfo pi)
             {
                 _packagesRef = pi.LibPath.ToUpperInvariant().Contains("PACKAGES");
                 _client = pi.LibPath.ToUpperInvariant().Contains("CLIENT");
@@ -173,7 +236,7 @@ namespace nugetine.Internal
                             }).ToArray();
             }
 
-            public int CompareTo(ComparibleRef other)
+            public int CompareTo(ComparableRef other)
             {
                 if (_packagesRef && !other._packagesRef) return -1;
 
@@ -206,12 +269,14 @@ namespace nugetine.Internal
             private readonly int _hashCode;
             public static readonly IEqualityComparer<PackageInfo> Comparer = new ComparerImpl();
 
-            public PackageInfo(string assemblyName, string package, string version, string libPath)
+            public PackageInfo(string assemblyName, string package, string version, string libPath, IDictionary<string, string> assemblyInfo)
             {
                 AssemblyName = assemblyName;
                 PackageName = package;
                 Version = version;
                 LibPath = libPath;
+                AssemblyInfo = assemblyInfo;
+
                 _hashCode = string.Join(
                     "\0",
                     new[]
@@ -219,7 +284,8 @@ namespace nugetine.Internal
                             AssemblyName,
                             PackageName,
                             Version,
-                            LibPath
+                            LibPath,
+                            String.Join(" ", AssemblyInfo.Values)
                         }
                     )
                     .ToUpperInvariant()
@@ -230,6 +296,7 @@ namespace nugetine.Internal
             public string PackageName { get; private set; }
             public string Version { get; private set; }
             public string LibPath { get; private set; }
+            public IDictionary<string, string> AssemblyInfo { get; private set; } 
 
             public string Path
             {

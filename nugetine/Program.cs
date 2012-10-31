@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Permissions;
@@ -67,17 +68,19 @@ namespace nugetine
             new SourceIndexer(@out).Run();
         }
 
+        /*
         private static void Glean(TextWriter @out, string slnPrefix)
         {
             new Gleaner(@out, slnPrefix).Run();
         }
+         */
 
         private static IReWriter SetupReWriter(TextWriter @out, string slnPrefix, BsonDocument config, BsonDocument sourceIndex)
         {
             return new ReWriter(@out, slnPrefix + ".sln", config, sourceIndex);
         }
 
-        private static string DetermineSlnPrefixAndSetupEnviroment(string[] args, TextWriter @out)
+        private static string DetermineSlnPrefixAndSetupEnviroment(IEnumerable<string> args, TextWriter @out)
         {
             var slnName = args.FirstOrDefault(a=>!a.StartsWith("-"));
             if (string.IsNullOrWhiteSpace(slnName))

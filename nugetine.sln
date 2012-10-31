@@ -14,8 +14,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{16B78B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NugetFix", "NugetFix\NugetFix.csproj", "{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NugetFix.Test", "NugetFix.Test\NugetFix.Test.csproj", "{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,16 +44,6 @@ Global
 		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|x86.ActiveCfg = Release|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{14315B85-127A-4BAE-BC2A-07B1ABCE14EA}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
