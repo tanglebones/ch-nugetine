@@ -467,119 +467,19 @@ namespace nugetine.Internal
 
 
             // re-write project references
-            var newCsprojContents = RxProjectReference.Replace(
-                csprojContents,
-                match =>
-                    {
-                        var includeDir = match.Groups[1].Value;
-                        var include = Path.GetFileNameWithoutExtension(includeDir);
-                        if (include == null)
-                            return match.Value;
-
-                        // project is a package and depends on a sibling project that is a package
-                        if (nuspecFileExists && File.Exists(Path.Combine(include, include + ".nuspec")))
-                            projectRefs.Add(include);
-
-                        if (_source.Contains(include))
-                        {
-                            return match.Value;
-                        }
-                        if (_reference.Contains(include))
-                        {
-                            toAddToReferences.Add(include);
-                            return string.Empty;
-                        }
-                        return match.Value;
-                    }
-                );
+            var newCsprojContents = RewriteProjectReferences(csprojContents, nuspecFileExists, projectRefs, toAddToReferences);
 
             // re-write nuspec file if it exists
-            if (nuspecFileExists)
-            {
-                if (projectRefs.Any())
-                {
-                    var nuspecContents = File.ReadAllText(nuspecFile);
-                    string newNuspecContents;
-                    if (RxDependencies.IsMatch(nuspecContents))
-                    {
-                        newNuspecContents = RxDependencies.Replace(
-                            nuspecContents,
-// ReSharper disable ImplicitlyCapturedClosure
-                            match => "<dependencies>" +
-// ReSharper restore ImplicitlyCapturedClosure
-                                     Environment.NewLine +
-                                     RemoveProjectRefs(match.Groups[1].Value, projectRefs) +
-                                     MakeProjectDependencies(projectRefs) +
-                                     Environment.NewLine +
-                                     "</dependencies>"
-                        );
-                    }
-                    else
-                    {
-                        newNuspecContents = RxMetaData.Replace(
-                            nuspecContents,
-// ReSharper disable ImplicitlyCapturedClosure
-                            match => "<metadata>" +
-// ReSharper restore ImplicitlyCapturedClosure
-                                     match.Groups[1].Value +
-                                     Environment.NewLine +
-                                     "<dependencies>" +
-                                     Environment.NewLine +
-                                     MakeProjectDependencies(projectRefs) +
-                                     Environment.NewLine +
-                                     "</dependencies>" +
-                                     Environment.NewLine +
-                                     "</metadata>"
-                                     );
-                    }
-
-                    if (newNuspecContents != nuspecContents)
-                    {
-                        File.WriteAllText(nuspecFile, newNuspecContents);
-                    }
-                }
-            }
+            RewriteNuspecReferences(nuspecFileExists, projectRefs, nuspecFile);
 
             // re-write nuget package restored SolutionDir hack to not depend on the check directory name
-
-            newCsprojContents = RxSolutionDirHackInCsProj.Replace(
-                newCsprojContents,
-                match => match.Groups[1].Value + "..\\" + match.Groups[3].Value,
-                1);
-
+            newCsprojContents = FixSolutionDir(newCsprojContents);
 
             // re-write package references
-            newCsprojContents = RxReference.Replace(
-                newCsprojContents,
-                match =>
-                    {
-                        var include = match.Groups[1].Value;
-                        var splitIndex = include.IndexOf(',');
-                        if (splitIndex > 0)
-                            include = include.Substring(0, splitIndex);
+            newCsprojContents = RewritePackageReferences(newCsprojContents, toAddToProjectReferences, packages);
 
-                        // if it's in source schedule it to be added to the project refs and remove it
-                        if (_source.Contains(include))
-                        {
-                            toAddToProjectReferences.Add(include);
-                            return string.Empty;
-                        }
-
-                        // if it's in reference rewrite it
-                        if (_reference.Contains(include))
-                        {
-                            var includeUpper = include.ToUpperInvariant();
-                            var assemblyInfo = _assemblyMapping[includeUpper].AsBsonDocument;
-                            var path = assemblyInfo["path"].AsString;
-                            packages.Add("  <package id=\"" + assemblyInfo["package"].AsString + "\" version=\"" +
-                                         assemblyInfo["version"].AsString + "\" />");
-                            return MakeReferenceSection(path.Replace("..\\packages","$(SolutionDir)\\packages"), include);
-                        }
-
-                        // leave everything else alone.
-                        return match.Value;
-                    }
-                );
+            // Fix CodeAnalysis version dependency
+            newCsprojContents = UpdateCodeAnalysisTag(newCsprojContents);
 
             // add references for removed project references
             if (toAddToReferences.Any())
@@ -687,6 +587,136 @@ namespace nugetine.Internal
                 + "</packages>"
                 ;
             File.WriteAllText(packagesConfigFileName, newPackagesConfigContents);
+        }
+
+        private string UpdateCodeAnalysisTag(string content)
+        {
+            const string oldRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>";
+            var newRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>" 
+                            + Environment.NewLine
+                            + @"    <CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>";
+            return content.Replace(oldRef, newRef);
+        }
+
+        private string RewritePackageReferences(string newCsprojContents, HashSet<string> toAddToProjectReferences, List<string> packages)
+        {
+            return RxReference.Replace(
+                newCsprojContents,
+                match =>
+                    {
+                        var include = match.Groups[1].Value;
+                        var splitIndex = include.IndexOf(',');
+                        if (splitIndex > 0)
+                            include = include.Substring(0, splitIndex);
+
+                        // if it's in source schedule it to be added to the project refs and remove it
+                        if (_source.Contains(include))
+                        {
+                            toAddToProjectReferences.Add(include);
+                            return string.Empty;
+                        }
+
+                        // if it's in reference rewrite it
+                        if (_reference.Contains(include))
+                        {
+                            var includeUpper = include.ToUpperInvariant();
+                            var assemblyInfo = _assemblyMapping[includeUpper].AsBsonDocument;
+                            var path = assemblyInfo["path"].AsString;
+                            packages.Add("  <package id=\"" + assemblyInfo["package"].AsString + "\" version=\"" +
+                                         assemblyInfo["version"].AsString + "\" />");
+                            return MakeReferenceSection(path.Replace("..\\packages","$(SolutionDir)\\packages"), include);
+                        }
+
+                        // leave everything else alone.
+                        return match.Value;
+                    }
+                );
+        }
+
+        private static string FixSolutionDir(string newCsprojContents)
+        {
+            return RxSolutionDirHackInCsProj.Replace(
+                newCsprojContents,
+                match => match.Groups[1].Value + "..\\" + match.Groups[3].Value,
+                1);
+        }
+
+        private void RewriteNuspecReferences(bool nuspecFileExists, HashSet<string> projectRefs, string nuspecFile)
+        {
+            if (nuspecFileExists)
+            {
+                if (projectRefs.Any())
+                {
+                    var nuspecContents = File.ReadAllText(nuspecFile);
+                    string newNuspecContents;
+                    if (RxDependencies.IsMatch(nuspecContents))
+                    {
+                        newNuspecContents = RxDependencies.Replace(
+                            nuspecContents,
+// ReSharper disable ImplicitlyCapturedClosure
+                            match => "<dependencies>" +
+// ReSharper restore ImplicitlyCapturedClosure
+                                     Environment.NewLine +
+                                     RemoveProjectRefs(match.Groups[1].Value, projectRefs) +
+                                     MakeProjectDependencies(projectRefs) +
+                                     Environment.NewLine +
+                                     "</dependencies>"
+                            );
+                    }
+                    else
+                    {
+                        newNuspecContents = RxMetaData.Replace(
+                            nuspecContents,
+// ReSharper disable ImplicitlyCapturedClosure
+                            match => "<metadata>" +
+// ReSharper restore ImplicitlyCapturedClosure
+                                     match.Groups[1].Value +
+                                     Environment.NewLine +
+                                     "<dependencies>" +
+                                     Environment.NewLine +
+                                     MakeProjectDependencies(projectRefs) +
+                                     Environment.NewLine +
+                                     "</dependencies>" +
+                                     Environment.NewLine +
+                                     "</metadata>"
+                            );
+                    }
+
+                    if (newNuspecContents != nuspecContents)
+                    {
+                        File.WriteAllText(nuspecFile, newNuspecContents);
+                    }
+                }
+            }
+        }
+
+        private string RewriteProjectReferences(string csprojContents, bool nuspecFileExists, HashSet<string> projectRefs, HashSet<string> toAddToReferences)
+        {
+            return RxProjectReference.Replace(
+                csprojContents,
+                match =>
+                    {
+                        var includeDir = match.Groups[1].Value;
+                        var include = Path.GetFileNameWithoutExtension(includeDir);
+                        if (include == null)
+                            return match.Value;
+
+                        // project is a package and depends on a sibling project that is a package
+                        if (nuspecFileExists && File.Exists(Path.Combine(include, include + ".nuspec")))
+                            projectRefs.Add(include);
+
+                        if (_source.Contains(include))
+                        {
+                            return match.Value;
+                        }
+                        if (_reference.Contains(include))
+                        {
+                            toAddToReferences.Add(include);
+                            return string.Empty;
+                        }
+                        return match.Value;
+                    }
+                );
         }
 
         private static string AddIncludeToExistingItemGroup(string content, string include, string contentType, Regex rx)
