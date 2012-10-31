@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Permissions;
+using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using nugetine.Internal;
 using nugetine.Internal.Interface;
@@ -15,6 +17,11 @@ namespace nugetine
         public static void Main(string[] args)
         {
             var @out = Console.Out;
+            if (args.Any(a => a == "--version"))
+            {
+                @out.WriteLine(GetVersion());
+                return;
+            }
             var index = args.Any(a => a == "-i");
             if (index)
             {
@@ -34,6 +41,21 @@ namespace nugetine
             @out.WriteLine(reWriter.ToString());
 
             reWriter.Run();
+        }
+
+        private static string GetVersion()
+        {
+            string res;
+            try
+            {
+                res = "nugetine. version: " +
+                    Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            } 
+            catch (Exception e)
+            {
+                res = e.Message;
+            }
+            return res;
         }
 
         private static BsonDocument LoadSourceIndex()
