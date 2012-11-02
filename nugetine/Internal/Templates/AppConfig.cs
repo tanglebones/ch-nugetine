@@ -16,7 +16,7 @@ namespace nugetine.Internal.Templates
 
         internal static string[] AssemblyBinding =
             {
-                "    <assemblyBinding>",
+                "    <assemblyBinding xmlns=\"urn:schemas-microsoft-com:asm.v1\">",
                 "    </assemblyBinding>"
             };
 
