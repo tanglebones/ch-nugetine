@@ -341,7 +341,7 @@ namespace nugetine.Internal
             {
                 content = RxAssemblyBindingBlock.Replace(
                     content,
-                    match => "<assemblyBinding>" 
+                    match => "<assemblyBinding xmlns=\"urn:schemas-microsoft-com:asm.v1\">" 
                         + Environment.NewLine 
                         + result.ToString()
                         + Environment.NewLine
