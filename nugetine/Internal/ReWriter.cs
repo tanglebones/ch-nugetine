@@ -591,6 +591,9 @@ namespace nugetine.Internal
 
         private string UpdateCodeAnalysisTag(string content)
         {
+            if (content.Contains(@"<CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>"))
+                return content;
+
             const string oldRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>";
             var newRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>" 
                             + Environment.NewLine
