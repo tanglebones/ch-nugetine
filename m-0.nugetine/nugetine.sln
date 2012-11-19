@@ -12,8 +12,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{16B78B
 		.nuget\NuGet.exe = .nuget\NuGet.exe
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NugetFix", "NugetFix\NugetFix.csproj", "{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,16 +32,6 @@ Global
 		{3AACF2E0-3934-4352-8352-BB0F02B6C19F}.Release|Mixed Platforms.Build.0 = Release|x86
 		{3AACF2E0-3934-4352-8352-BB0F02B6C19F}.Release|x86.ActiveCfg = Release|x86
 		{3AACF2E0-3934-4352-8352-BB0F02B6C19F}.Release|x86.Build.0 = Release|x86
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{77E7D1AD-2900-4EC5-8193-C369A6E9D94F}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
