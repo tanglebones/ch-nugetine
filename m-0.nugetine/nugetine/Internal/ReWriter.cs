@@ -126,7 +126,7 @@ namespace nugetine.Internal
 
         private static readonly Regex RxEndOfProject =
             new Regex(
-                @"\s+-->\s+</Project>",
+                @"<!-- To modify your build process",
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
@@ -592,13 +592,15 @@ namespace nugetine.Internal
         private string UpdateCodeAnalysisTag(string content)
         {
             const string oldRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>";
-            var newRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>" 
-                            + Environment.NewLine
-                            + @"    <CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>";
+            if (content.Contains(oldRef)) return content;
+            var newRef = @"<RunCodeAnalysis>true</RunCodeAnalysis>"
+                         + Environment.NewLine
+                         +
+                         @"    <CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>";
             return content.Replace(oldRef, newRef);
         }
 
-        private string RewritePackageReferences(string newCsprojContents, HashSet<string> toAddToProjectReferences, List<string> packages)
+        private string RewritePackageReferences(string newCsprojContents, ISet<string> toAddToProjectReferences, List<string> packages)
         {
             return RxReference.Replace(
                 newCsprojContents,
@@ -641,7 +643,7 @@ namespace nugetine.Internal
                 1);
         }
 
-        private void RewriteNuspecReferences(bool nuspecFileExists, HashSet<string> projectRefs, string nuspecFile)
+        private void RewriteNuspecReferences(bool nuspecFileExists, ISet<string> projectRefs, string nuspecFile)
         {
             if (nuspecFileExists)
             {
@@ -690,7 +692,7 @@ namespace nugetine.Internal
             }
         }
 
-        private string RewriteProjectReferences(string csprojContents, bool nuspecFileExists, HashSet<string> projectRefs, HashSet<string> toAddToReferences)
+        private string RewriteProjectReferences(string csprojContents, bool nuspecFileExists, ISet<string> projectRefs, HashSet<string> toAddToReferences)
         {
             return RxProjectReference.Replace(
                 csprojContents,
@@ -768,13 +770,13 @@ namespace nugetine.Internal
                 match =>
                     {
                         var result =
-                        Environment.NewLine
-                        + "  <ItemGroup>"
+                        "<ItemGroup>"
                         + Environment.NewLine
                         + "    <None Include=\"" + include + "\" />"
                         + Environment.NewLine
                         + "  </ItemGroup>"
-                        + match.Groups[0].Value;
+                        + Environment.NewLine
+                        + "  " + match.Groups[0].Value;
                         return result;
                     },
                 1
