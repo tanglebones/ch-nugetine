@@ -46,6 +46,12 @@ namespace nugetine.Internal
                 RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
                 );
 
+        private static readonly Regex RxStartOfConfiguration =
+            new Regex(
+                @"<configuration>",
+                RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase
+                );
+
         private static readonly Regex RxStartOfAssemblyBinding =
             new Regex(
                 @"<runtime>",
@@ -310,7 +316,7 @@ namespace nugetine.Internal
                 // create new from template
                 content = ParseTag(AppConfig.EmptyConfig);
             }
-            //var modified = UpdateConfig(ref content);
+
             var modified = SetAssemblyContent(ref content);
             if (modified)
             {
@@ -356,13 +362,27 @@ namespace nugetine.Internal
         {
             if (RxAssemblyBindingBlock.IsMatch(content)) return;
             var assemblyBindingTags = ParseTag(AppConfig.AssemblyBinding);
+            // start of runtime
             if (RxStartOfAssemblyBinding.IsMatch(content))
             {
                 content = RxStartOfAssemblyBinding.Replace(
                     content,
                     match => "<runtime>"
-                             + Environment.NewLine
-                             + assemblyBindingTags
+                        + Environment.NewLine
+                        + assemblyBindingTags
+                    );
+            // start of configuration
+            } else if (RxStartOfConfiguration.IsMatch(content))
+            {
+                content = RxStartOfConfiguration.Replace(
+                    content,
+                    match => "<configuration>"
+                        + Environment.NewLine
+                        + "  <runtime>"
+                        + Environment.NewLine
+                        + assemblyBindingTags
+                        + Environment.NewLine
+                        + "  </runtime>"
                     );
             }
         }
