@@ -27,6 +27,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <RunCodeAnalysis>true</RunCodeAnalysis>
+    <CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -37,6 +38,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <RunCodeAnalysis>true</RunCodeAnalysis>
+    <CodeAnalysisAdditionalOptions>/assemblyCompareMode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="MongoDB.Bson">
@@ -56,29 +58,28 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Internal\Classifier.cs" />
     <Compile Include="Internal\Gleaner.cs" />
+    <Compile Include="Internal\Interface\IClassifier.cs" />
     <Compile Include="Internal\Interface\IGleaner.cs" />
     <Compile Include="Internal\Ex.cs" />
     <Compile Include="Internal\Interface\IReWriter.cs" />
     <Compile Include="Internal\Interface\ISourceIndexer.cs" />
     <Compile Include="Internal\SourceIndexer.cs" />
+    <Compile Include="Internal\Templates\AppConfig.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Internal\ReWriter.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="nugetine.nuspec">
-      <SubType>Designer</SubType>
-    </None>
-    <None Include="packages.config">
-      <SubType>Designer</SubType>
-    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>"$(SolutionDir)ilmerge.exe" /targetplatform:v4 "/out:$(SolutionDir)$(TargetFileName)" "$(TargetDir)$(TargetFileName)" "$(TargetDir)MongoDB.Bson.dll"</PostBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="App.config" />
+  </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

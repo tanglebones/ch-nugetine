@@ -12,16 +12,16 @@ namespace nugetine.Internal
     internal class SourceIndexer: ISourceIndexer
     {
         private readonly JsonWriterSettings _settings =
-    new JsonWriterSettings(
-        true,
-        Encoding.UTF8,
-        GuidRepresentation.Standard,
-        true,
-        " ",
-        Environment.NewLine,
-        JsonOutputMode.Strict,
-        new Version(1, 0)
-        );
+            new JsonWriterSettings(
+                true,
+                Encoding.UTF8,
+                GuidRepresentation.Standard,
+                true,
+                " ",
+                Environment.NewLine,
+                JsonOutputMode.Strict,
+                new Version(1, 0)
+            );
 
         private readonly TextWriter _out;
 
